@@ -61,8 +61,10 @@ sub new {
     my $class = ref( $proto ) || $proto;
     my $self = {};
     
+   
     # Create a session wrapper object
     bless $self, $class;
+
     wantarray ? ( $self, '' ) : $self; 
 }
  
@@ -1673,6 +1675,8 @@ sub build_ip_tree_graph_html {
   Arguments:
     device id
     depth
+    depthup
+    depthdown
     view
     showvlans    Boolean
     vlans
@@ -1688,13 +1692,16 @@ sub build_ip_tree_graph_html {
 =cut
 sub build_device_topology_graph {
     my ($self, %argv) = @_;
-    my ($id, $depth, $view, $showvlans, $shownames, $filename, $vlans, $format, $direction, $specific_vlan) = 
-	@argv{'id', 'depth', 'view', 'show_vlans', 'show_names', 'filename', 'vlans', 'format', 'direction', 'specific_vlan'};
+    my ($id, $root, $depth, $depthup, $depthdown, $view, $showvlans, $shownames, $filename, $vlans, $format, $direction, $specific_vlan) = 
+    @argv{'id', 'root', 'depth', 'depthup', 'depthdown', 'view', 'show_vlans', 'show_names', 'filename', 'vlans', 'format', 'direction', 'specific_vlan'};
     
     # Guard against malicious input
     $depth = (int($depth) > 0) ? int($depth) : 0;
+    $depthup = (int($depthup) > 0) ? int($depthup) : 0;
+    $depthdown = (int($depthdown) > 0) ? int($depthdown) : 0;
     $showvlans = ($showvlans == 1) ? 1 : 0;
     $shownames = ($shownames == 1) ? 1 : 0;
+
 
     $direction = ($direction eq 'up_down')? 0 : 1;
 
@@ -1728,10 +1735,13 @@ sub build_device_topology_graph {
     }
 
     sub dfs { # DEPTH FIRST SEARCH - recursive
-        my ($g, $device, $hops, $seen, $vlans, $showvlans, $shownames, $view, $specific_vlan) = @_;
-        return unless $hops;
+        my ($g, $root, $device, $hopup, $hopdown, $prev_dir, $seen, $vlans, $showvlans, $shownames, $view, $specific_vlan) = @_;
+        return if ($hopup == 0 && $prev_dir eq "up");
+        return if ($hopdown == 0 && $prev_dir eq "down");
 
         my @ifaces = $device->interfaces;
+        
+        my $dir = "undef";           
         
         foreach my $iface ( sort { int($a) cmp int($b) }  @ifaces) {
             my $neighbor = $iface->neighbor;
@@ -1741,6 +1751,23 @@ sub build_device_topology_graph {
 	    my $neighbor_name = ($shownames ? $neighbor->name : $neighbor->number) || $neighbor->number;
 
             my $nd = $neighbor->device;
+ 
+
+            my %seen = {};
+            my $dev_dist = $self->_dist_to_root(\%seen, $root, $device->id, 0);
+            %seen = {};
+            my $nd_dist = $self->_dist_to_root(\%seen, $root, $nd->id, 0);
+
+            # this figures which is the child and which is the parent
+            if ($dev_dist < $nd_dist){
+                $dir = "down";      
+            } elsif ($dev_dist> $nd_dist) {
+                $dir = "up";
+            } else {
+                $dir = "level";
+            }
+            next if ($dir ne $prev_dir && $prev_dir ne "undef");
+
             unless (scalar($nd)) {
                 $logger->debug("No device found for neighbor $neighbor");
                 next;
@@ -1755,11 +1782,13 @@ sub build_device_topology_graph {
 
             my $color = 'black';
 	    my $cont = 0;
+
             if ($showvlans && $iface->vlans) {
                 foreach my $vlan ($iface->vlans) {
 		    if ( !defined($specific_vlan) || (defined($specific_vlan) && $specific_vlan == $vlan->vlan->vid) ) {
 			my $neighbor_vlan = InterfaceVlan->search(interface=>$neighbor->id, vlan=>$vlan->vlan->id)->first;
-			next if ( defined($specific_vlan) && $specific_vlan != 0 && ( ($neighbor_vlan && $neighbor_vlan->vlan->vid != $specific_vlan) || !defined($neighbor_vlan) ) );
+                        next if ( defined($specific_vlan) && $specific_vlan != 0 && 
+                            ( ($neighbor_vlan && $neighbor_vlan->vlan->vid != $specific_vlan) || !defined($neighbor_vlan) ) );
 
 			my $style = 'solid';
 			my $vname = $vlan->vlan->name || $vlan->vlan->vid;
@@ -1768,8 +1797,7 @@ sub build_device_topology_graph {
 			}
 			$color = $vlans->{$vname}{'color'};
 			
-			if ($vlan->stp_state eq 'blocking' 
-			    || ($neighbor_vlan and $neighbor_vlan->stp_state eq 'blocking')) {
+                        if ($vlan->stp_state eq 'blocking' || ($neighbor_vlan and $neighbor_vlan->stp_state eq 'blocking')) {
 			    $style='dashed';
 			}   
 			
@@ -1809,9 +1837,21 @@ sub build_device_topology_graph {
 		$seen->{'NODE'}{$nd->id} = 1;
 	    }
 	    
+            # If we're at our root, we're done...
+            if ($root == $nd->id) {
+                $cont = 0;
+            }
+
             # If we haven't recursed across this edge before, then do so now.
 	    if ( $cont == 1 ) {
-		&dfs($g, $nd, $hops-1, $seen, $vlans, $showvlans, $shownames, $view, $specific_vlan);
+                if ($dir eq 'up') {
+                    &dfs($g, $root, $nd, $hopup-1, $hopdown, $dir, $seen, $vlans, $showvlans, $shownames, $view, $specific_vlan);
+                } elsif ($dir eq 'down') {
+                    &dfs($g, $root, $nd, $hopup, $hopdown-1, $dir, $seen, $vlans, $showvlans, $shownames, $view, $specific_vlan);
+                } else {
+                    &dfs($g, $root, $nd, $hopup-1, $hopdown-1, $seen, $vlans, $showvlans, $shownames, $view, $specific_vlan);
+
+                }
 	    }
         }
     }
@@ -1836,9 +1876,16 @@ sub build_device_topology_graph {
     my $seen = { NODE=>{}, EDGE=>{} };
     $seen->{'NODE'}{$start->id} = 1;
 
-    &dfs($g, $start, $depth, $seen, $vlans, $showvlans, $shownames, $view, $specific_vlan);
+    if ($depthup > 0 && $depthdown > 0) {
+       &dfs($g, $root, $start, $depthup, $depthdown, "undef", $seen, $vlans, $showvlans, $shownames, $view, $specific_vlan);
+    } else {
+       &dfs($g, $root, $start, $depth, $depth, "undef", $seen, $vlans, $showvlans, $shownames, $view, $specific_vlan);
+    }
+
+
 
     $argv{format} ||= 'png';
+
     if ( $argv{format} =~ /^(text|ps|hpgl|gd|gd2|gif|jpeg|png|svg)$/){
 	my $method = 'as_'.$argv{format};
 	$g->$method($filename);
@@ -2366,6 +2413,29 @@ sub localize_newlines {
 	}
     }
     1;
+}
+
+sub _dist_to_root {
+    my ($self, $seen, $root, $n, $d) = @_;
+    return $d if ($n == $root);
+
+    $seen->{$n} = 1;
+
+    my $g = Device->shortest_path_parents($n);
+
+    foreach my $f (keys %$g) {
+        foreach my $s (keys %{$g->{$f}}) {
+            if ($n == $s) {
+                if ($seen->{$f} == 0 ) {
+                    $seen->{$f} = 1;
+                    my $t = $self->_dist_to_root($seen, $root, $f, $d+1);
+                    return $t if ($t > 0);
+                }
+            }
+        }
+    }
+
+    return 0;
 }
 
 =head1 AUTHORS
