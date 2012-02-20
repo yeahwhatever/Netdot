@@ -60,11 +60,11 @@ export
 
 # If mason ever decides to use different directories in its data_dir there will
 # be trouble.
-DIR = bin doc htdocs tmp tmp/sessions /tmp/sessions/locks lib etc var import export mibs
+DIR = bin doc htdocs tmp tmp/sessions /tmp/sessions/locks lib etc var import export
 
 .PHONY: bin doc htdocs lib etc var
 
-install: dir doc htdocs lib var _mibs bin etc _import _export
+install: dir doc htdocs lib var bin etc _import _export
 	@echo
 	@echo "Netdot is installed. "
 	@echo "Please read the available documentation before proceeding."
@@ -128,9 +128,6 @@ lib:
 
 var:
 	cd $@ ; $(MAKE) all DIR=$@
-
-_mibs:
-	cd mibs ; $(MAKE) all DIR=mibs
 
 bin:
 	cd $@; $(MAKE) install DIR=$@
