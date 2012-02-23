@@ -40,7 +40,7 @@ EOF
 # handle cmdline args
 my $result = GetOptions( "r|root=s"         => \$self{root},
              "s|start=s"        => \$self{start},
-			 "d|depth=s"        => \$self{depth},
+             "d|depth=s"        => \$self{depth},
              "u|depthup=s"     => \$self{depthup},
              "o|depthdown=s"   => \$self{depthdown},
 			 "f|filename=s"     => \$self{filename},
