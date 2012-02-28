@@ -375,19 +375,26 @@ sub insert {
 	$obj = $class->SUPER::insert($argv);
     };
     if ( my $e = $@ ){
-	my $msg = "Error while inserting $class: ";
-	# Class::DBI shows a full stack trace
 	# Try to make it less frightening for the user
+	# This object seems to include a stack trace
+	# in the message itself. We try to remove it
+	# in several ways.
+	$e->show_trace(0);
+	$error = $e->error;
+	$error =~ s/Stack:.*//sg;
+	my $msg = "Error while inserting $class: ";
 	if ( $e =~ /Duplicate entry/i ){
-	    $msg .= "Some values are duplicated. Full error: $e";
+	    $msg .= "Some values are duplicated\n\n";
+	    $msg .= "Error details: ".$error;
 	}elsif ( $e =~ /cannot be null|not-null constraint/i ){
-	    $msg .= "Some fields cannot be null. Full error: $e";
+	    $msg .= "Some fields cannot be null\n\n";
+	    $msg .= "Error details: ".$error;
 	}elsif ( $e =~ /invalid input syntax/i ){
 	    $msg .= "Some fields have invalid input syntax.";
 	}elsif ( $e =~ /out of range/i ){
 	    $msg .= "Some values are out of valid range.";
 	}else{
-	    $msg .= $e;
+	    $msg .= $error;
 	}
 	$class->throw_user("$msg");
     }
@@ -1113,7 +1120,7 @@ sub _adjust_vals{
     my %meta_columns;
     map { $meta_columns{$_->name} = $_ } $class->meta_data->get_columns;
     foreach my $field ( keys %$args ){
-	my $mcol = $meta_columns{$field} || $class->throw_fatal("Cannot find $field in metadata");
+	my $mcol = $meta_columns{$field} || $class->throw_fatal("Cannot find $field in $class metadata");
 	if ( !blessed($args->{$field}) && $mcol->sql_type eq 'varchar' && defined($mcol->length) && $mcol->length =~ /^\d+$/ ) {
             if (defined($args->{$field}) && length($args->{$field}) > $mcol->length) {
 		my $msg = "Value for field '$field' (max " . $mcol->length . ") is too long: '$args->{$field}'";

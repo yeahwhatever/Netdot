@@ -1287,6 +1287,29 @@ sub matches_v6 {
     return 0;
 }
 
+############################################################################
+=head2 - objectify - Convert to object as needed
+
+  Args: 
+    id, address or object
+  Returns: 
+    Ipblock object
+  Examples:
+    my $ipb = Ipblock->objectify($zonestr);
+
+=cut
+sub objectify{
+    my ($class, $b) = @_;
+    if ( (ref($b) =~ /Ipblock/) ){
+	return $b;
+    }elsif ( $b =~ /\D/ ){
+	return Ipblock->search(address=>$b)->first;
+    }else{
+	# Must be an ID
+	return Ipblock->retrieve($b);
+    }
+}
+
 =head1 INSTANCE METHODS
 =cut
 
@@ -2587,34 +2610,38 @@ sub get_next_free {
     my $strategy = $argv{strategy} || Netdot->config->get('IP_ALLOCATION_STRATEGY');
 
     my $s = $self->_netaddr;
+    my $ret;
     if ( $strategy eq 'first' ){
 	for ( my $addr=Math::BigInt->new($s->first->numeric); $addr <= $s->last->numeric; $addr++ ){
-	    return &_do_addr($class, $addr, \%used, $self->version);
+	    $ret = &_do_addr($class, $addr, \%used, $self->version);
+	    last if $ret;
 	}
     }elsif ( $strategy eq 'last' ){
 	for ( my $addr=Math::BigInt->new($s->last->numeric); $addr >= $s->first->numeric; $addr-- ){
-	    return &_do_addr($class, $addr, \%used, $self->version);
+	    $ret = &_do_addr($class, $addr, \%used, $self->version);
+	    last if $ret;
 	}	
     }else{
 	$self->throw_fatal("Ipblock::get_next_free: Invalid strategy: $strategy");
     }
+    # Return what we got
+    return $ret;
 
     sub _do_addr(){
 	my ($class, $addr, $used, $version) = @_;
 	# Ignore anything that exists, unless it's marked as available
-	next if (exists $used->{$addr} && $used->{$addr} ne 'Available');
-	if ( my $ipb = Ipblock->search(address=>$addr)->first ){
+	if (exists $used->{$addr} && $used->{$addr} ne 'Available'){
+	    return undef;
+	}
+	if ( my $ipb = Ipblock->search(address=>$addr, version=>$version)->first ){
 	    # IP may have been incorrectly set as Available
 	    # Correct and move on
 	    if ( $ipb->arecords || $ipb->dhcp_scopes ){
 		$ipb->update({status=>'Static'});
-		next;
-	    }else{
-		return $class->int2ip($addr, $version);
+		return undef;
 	    }
-	}else{
-	    return $class->int2ip($addr, $version);
 	}
+	return $class->int2ip($addr, $version);
     }
 }
 

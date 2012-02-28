@@ -141,7 +141,7 @@ sub search_like {
     refresh   time before the zone should be refreshed
     retry     time before a failed refresh should be retried
     expire    max time before zone no longer authoritative
-    minimum   default TTL that should be exported with any RR from this zone
+    minimum   negative caching TTL (RFC 2308)
     template  (optional) Name or ID of another zone to clone from
   Returns: 
     Zone object
@@ -228,6 +228,31 @@ sub insert {
 
     $newzone->update_serial();
     return $newzone;
+}
+
+############################################################################
+=head2 - objectify - Convert to object as needed
+
+  Args: 
+    id, name or object
+  Returns: 
+    Zone object
+  Examples:
+    my $zone = Zone->objectify($zonestr);
+
+=cut
+sub objectify {
+    my ($class, $z) = @_;
+    $class->isa_class_method('objectify');
+
+    if ( (ref($z) =~ /Zone/) ){
+	return $z;
+    }elsif ( $z =~ /\D/ ){
+	return $class->search(name=>$z)->first;
+    }else{
+	# Must be an ID
+	return $class->retrieve($z);
+    }
 }
 
 

@@ -16,10 +16,10 @@ title  => 'Add Host'
 %#######################################################################
 <%args>
 $add_host_block
-$address       => undef # Can be passed optionally. Otherwise we'll get next one.
+$address       => undef # Can be passed optionally
 $user          => $ui->get_current_user($r)
 $zone_id       => undef
-$hostname      => undef
+$name          => undef
 $aliases       => undef
 $expiration    => undef
 $cpu           => undef
@@ -67,132 +67,72 @@ if ( $zone_id ){
 }
 
 if ( $submit ){
-
-    unless ( $address ){
-	# Obtain next available address
-	my $ip_strategy = Netdot->config->get("IP_ALLOCATION_STRATEGY");
-	eval {
-	    $address = $block->get_next_free(strategy=>$ip_strategy);
-	};
-	if ( my $e = $@ ){
-	    $m->comp('/generic/error.mhtml', error=>"$e");	
-	}
-	unless ( $address ){
-	    $m->comp('/generic/error.mhtml', error=>"Could not get an available address from ".$block->get_label);
-	}
-    }
-    
     unless ( $zone ){
 	$m->comp('/generic/error.mhtml', error=>"A DNS Domain (Zone) is required");
     }
-    
-    unless ( $hostname ){
+    unless ( $name ){
 	$m->comp('/generic/error.mhtml', error=>"A hostname is required");
     }
     
-    eval {
-	RR->validate_name($hostname);
-    };
-    if ( my $e = $@ ){
-	$m->comp('/generic/error.mhtml', error=>$e);
-    }
-
-    if ( my $h = RR->search(name=>$hostname, zone=>$zone)->first ){
-	$m->comp('/generic/error.mhtml', error=>$h->get_label." is already taken");
-    }
-
-    # We do not want two host scopes with the same physical address in the same subnet
-    if ( $ethernet ){
-	if ( my $physaddr = PhysAddr->search(address=>$ethernet)->first ){
-	    if ( my @host_scopes = $physaddr->dhcp_hosts ){
-		foreach my $host ( @host_scopes ){
-		    if ( $host->ipblock->parent && $host->ipblock->parent->id == $block->id ){
-			my $hname = $host->ipblock->address;
-			my $ipid  = $host->ipblock->id;
-			$m->comp('/generic/error.mhtml', error=>"Host <strong><a href=\"../management/host.html?ipblock=$ipid\">$hname</a></strong> is already registered with Ethernet: $ethernet in this subnet");
-		    }
-		}
-	    }
-	}
-    }
-    my $person = $ui->get_user_person($user);
-
-    my %args;
-    if ( $aliases ){
-	my @aliases = split ',', $aliases;
-	foreach my $alias ( @aliases ){
-	    $alias =~ s/\s+//g;
-	    # In case they included the domain part in the alias
-	    my $domain = $zone->name;
-	    $alias =~ s/\.$domain$//;
-	    if ( my $h = RR->search(name=>$alias, zone=>$zone)->first ){
-		$m->comp('/generic/error.mhtml', error=>$h->get_label." from your aliases list is already taken");
-	    }
-	    eval {
-		RR->validate_name($alias);
-	    };
-	    if ( my $e = $@ ){
-		$m->comp('/generic/error.mhtml', error=>"Invalid Alias $alias: $e");
-	    }
-	    push @{$args{aliases}}, $alias;
-	}
-    }
-    
-    foreach my $key ( qw(hostname expiration ethernet) ){
+    my %args; # For RR->add_host()
+    foreach my $key ( qw(name expiration ethernet aliases) ){
 	$args{$key} = $ARGS{$key};
     }
-    $args{zone}    = $zone;
+    my $person = $ui->get_user_person($user);
     $args{person}  = $person;
-    $args{block}   = $block;
-    $args{address} = $address;
-
-    my @text_records;
+    $args{zone}    = $zone;
+    $args{subnet}  = $block;
+    $args{address} = $address if $address;
 
     # Hardware Info
     $args{cpu} = $cpu || $other_cpu;
     $args{os}  = $os  || $other_os;
 
+    # Lines to go in the info field
+    my @info;
+
     # Location
-    if ( $room_id || $site_id || $site_name ){
-	my $txtdata;
+    if ( $room_id || $room_number || $site_id || $site_name ){
+	my $info;
 	if ( my $room = Room->retrieve($room_id) ){
-	    $txtdata = "LOC: ".$room->get_label if $room;
+	    $info = "LOC: ".$room->get_label;
 	    # the room label includes the site name
 	}elsif ( $room_number ){
-	    $txtdata = "LOC: ".$room_number;
+	    $info = "LOC: ".$room_number;
 	    if ( my $site = Site->retrieve($site_id) ){
-		$txtdata .=  " ".$site->get_label;
+		$info .=  " ".$site->get_label;
 	    }elsif ( $site_name ){
-		$txtdata .=  " ".$site_name;
+		$info .=  " ".$site_name;
 	    }
 	}else{
 	    if ( my $site = Site->retrieve($site_id) ){
-		$txtdata =  $site->get_label;
+		$info =  $site->get_label;
 	    }elsif ( $site_name ){
-		$txtdata =  $site_name;
+		$info =  $site_name;
 	    }
 	}
-	push @text_records, $txtdata if ( $txtdata );
+	push @info, $info if ( $info );
     }
     
     # Contacts
     if ( $person ){
 	# Add the current user as a contact
-	my $txtdata = "CON: ".$person->get_label;
-	$txtdata .= " (".$person->email.")" if $person->email; 
-	$txtdata .= ", ".$person->office if $person->office;
-	push @text_records, $txtdata if ( $txtdata );
+	my $info = "CON: ".$person->get_label;
+	$info .= " (".$person->email.")" if $person->email; 
+	$info .= ", ".$person->office if $person->office;
+	push @info, $info if ( $info );
     }
     
     # Add additional contact info
     if ( $contact_name ){
-	my $txtdata = "";
-	$txtdata =  "CON: ".$contact_name;
-	$txtdata .= " (".$contact_email.")" if $contact_email; 
-	$txtdata .= ", ".$contact_phone if $contact_phone; 
-	push @text_records, $txtdata if ( $txtdata );
+	my $info = "";
+	$info =  "CON: ".$contact_name;
+	$info .= " (".$contact_email.")" if $contact_email; 
+	$info .= ", ".$contact_phone if $contact_phone; 
+	push @info, $info if ( $info );
     }
-    $args{text_records} = \@text_records if @text_records;
+    my $info_text = join "\n", @info;
+    $args{info} = $info_text if ( $info_text );
     
     my $rr;
     eval {
@@ -227,7 +167,7 @@ if ( $submit ){
          <input type="hidden" name="address" value="<% $address %>">
 %   }
     <table><tr><td>
-    <p>Required fields are marked with an asterisk (<font color="red">*</font>).<br>
+    <p>(<font color="red">*</font>) Field is required<br>
     <p>Help is available for some fields by clicking on the field name.<br>
     <p><br>
     <fieldset class="large">
@@ -270,7 +210,7 @@ if ( $submit ){
         </p>
         <p>
         <label for="name"><% $ui->help_link('../user_help/hosts.html#Hostname', '', '', 'Host Name') %> <font color="red">*</font></label>
-        <input type="text" name="hostname" class="longtxt" value="">
+        <input type="text" name="name" class="longtxt" value="">
         </p>
         <p>
         <label for="ethernet"><% $ui->help_link('../user_help/hosts.html#Ethernet', '', '', 'Ethernet Address') %></label>
