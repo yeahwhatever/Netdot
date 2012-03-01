@@ -1427,8 +1427,8 @@ if ( $ipeers ){
     </div>
     <div class="containerbody">
     <center>
-%       $toporoot = Device->search(name=>$toporoot)->first->id;
-%       print $ui->build_device_topology_graph_html(id=>$id, view=>$view, root=>$toporoot,
+%       $toporoot = Device->search(name=>$toporoot)->first || $m->comp('/generic/error.mhtml', error=>"Cannot find root device: $toporoot");
+%       print $ui->build_device_topology_graph_html(id=>$id, view=>$view, root=>$toporoot->id,
 %                                                    depthup=>$topodepthup, depthdown=>$topodepthdown,
 %                                                   web_path=>$r->dir_config('NetdotPath'), 
 %                                                   show_vlans=>$topovlans, show_names=>$toponames, 
