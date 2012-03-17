@@ -314,6 +314,76 @@ if ($netdot_config->get('DB_TYPE') eq "mysql") {
             "ALTER TABLE dhcpscope MODIFY COLUMN failover_peer varchar(128);",
             "ALTER TABLE zone MODIFY COLUMN include text;",
             "ALTER TABLE savedqueries MODIFY COLUMN querytext text;",
+
+	    # Joe
+	    "ALTER TABLE accessright ALTER COLUMN object_id TYPE intger;",
+	    "ALTER TABLE asset DROP KEY asset2;"
+	    "ALTER TABLE asset ADD UNIQUE KEY asset2 (product_id, serial_number);",
+	    "ALTER TABLE backbonecable_history MODIFY COLUMN end_closet bigint(20) NOT NULL;",
+	    "ALTER TABLE backbonecable_history MODIFY COLUMN start_closet bigint(20) NOT NULL;",
+	    "ALTER TABLE backbonecable_history MODIFY COLUMN type bigint(20) NOT NULL;",
+	    "ALTER TABLE bgppeering MODIFY COLUMN max_v4_prefixes int(11) NOT NULL;"
+	    "ALTER TABLE bgppeering MODIFY COLUMN max_v6_prefixes int(11) NOT NULL;"
+	    
+	    # All of the info columns
+	    "ALTER TABLE asset ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE availability ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE backbonecable ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE backbonecable_history ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE bgppeering ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE cablestrand ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE cablestrand_history ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE cabletype ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE circuit ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE circuit_history ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE circuitstatus ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE circuittype ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE closet ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE closetpicture ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE contact ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE contact_history ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE contactlist ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE contacttype ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE device ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE device_history ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE deviceattrname ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE dhcpattrname ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE dhcpscopetype ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE entity ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE entity_history ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE entitytype ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE fibertype ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE floor ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE floorpicture ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE horizontalcable ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE interface ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE interface_history ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE ipblock ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE ipblockattrname ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE maintcontract ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE monitorstatus ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE person ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE person_history ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE physaddrattrname ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE product ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE product_history ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE producttype ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE rr ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE schemainfo ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE service ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE site ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE site_history ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE sitelink ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE sitelink_history ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE sitepicture ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE splice ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE strandstatus ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE usertype ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE vlan ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE vlangroup ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE vlangroup_history ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE zone ALTER COLUMN info TYPE text;",
+	    "ALTER TABLE zonealias ALTER COLUMN info TYPE text;",
             );
 } elsif ($netdot_config->get('DB_TYPE') eq "Pg") {
     @statements = (
@@ -396,6 +466,8 @@ if ($netdot_config->get('DB_TYPE') eq "mysql") {
             "ALTER TABLE dhcpscope ALTER COLUMN failover_peer TYPE varchar(128);",
             "ALTER TABLE zone ALTER COLUMN include TYPE text;",
             "ALTER TABLE savedqueries ALTER COLUMN querytext TYPE text;",
+
+	    
             );
 }
 
