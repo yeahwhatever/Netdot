@@ -466,8 +466,6 @@ if ($netdot_config->get('DB_TYPE') eq "mysql") {
             "ALTER TABLE dhcpscope ALTER COLUMN failover_peer TYPE varchar(128);",
             "ALTER TABLE zone ALTER COLUMN include TYPE text;",
             "ALTER TABLE savedqueries ALTER COLUMN querytext TYPE text;",
-
-	    
             );
 }
 
