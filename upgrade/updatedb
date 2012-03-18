@@ -316,14 +316,14 @@ if ($netdot_config->get('DB_TYPE') eq "mysql") {
             "ALTER TABLE savedqueries MODIFY COLUMN querytext text;",
 
 	    # Joe
-	    "ALTER TABLE accessright ALTER COLUMN object_id TYPE intger;",
-	    "ALTER TABLE asset DROP KEY asset2;"
+	    "ALTER TABLE accessright ALTER COLUMN object_id TYPE integer;",
+	    "ALTER TABLE asset DROP KEY asset2;",
 	    "ALTER TABLE asset ADD UNIQUE KEY asset2 (product_id, serial_number);",
 	    "ALTER TABLE backbonecable_history MODIFY COLUMN end_closet bigint(20) NOT NULL;",
 	    "ALTER TABLE backbonecable_history MODIFY COLUMN start_closet bigint(20) NOT NULL;",
 	    "ALTER TABLE backbonecable_history MODIFY COLUMN type bigint(20) NOT NULL;",
-	    "ALTER TABLE bgppeering MODIFY COLUMN max_v4_prefixes int(11) NOT NULL;"
-	    "ALTER TABLE bgppeering MODIFY COLUMN max_v6_prefixes int(11) NOT NULL;"
+	    "ALTER TABLE bgppeering MODIFY COLUMN max_v4_prefixes int(11) NOT NULL;",
+	    "ALTER TABLE bgppeering MODIFY COLUMN max_v6_prefixes int(11) NOT NULL;",
 	    
 	    # All of the info columns
 	    "ALTER TABLE asset ALTER COLUMN info TYPE text;",
