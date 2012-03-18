@@ -17,13 +17,17 @@ my $USAGE = <<EOF;
  Build Network Topology Graph
 
  Usage: $0 [-r|--root <device>] [-d|--depth <integer>] 
+           [-u|--depth-up <integer>] [-o|--depth-down <integer>]
            [-V|--specificvlan <vlanid>] [-v|--vlans] [-n|names] 
            [-F|--format] [-D|--direction <up_down|left_right>]
            -f|--filename <name>
 
     Argument Detail: 
     -r, --root <hostname>                Root host (default: $self{root})
+    -s, --start <hostname>               Start host (default: $self{root})
     -d, --depth <integer>                Graph depth. How many hops away from root? (default: $self{depth})
+    -u, --depthup <integer>              Graph depth going up from root
+    -o, --depthdown <integer>            Graph depth going down from root
     -f, --filename <name>                File name for image
     -F, --format <format>                Graphic file format (text|ps|hpgl|gd|gd2|gif|jpeg|png|svg)
     -D, --direction <up_down|left_right> Direction in which graph will be rendered
@@ -35,7 +39,10 @@ EOF
     
 # handle cmdline args
 my $result = GetOptions( "r|root=s"         => \$self{root},
-			 "d|depth=s"        => \$self{depth},
+             "s|start=s"        => \$self{start},
+             "d|depth=s"        => \$self{depth},
+             "u|depthup=s"     => \$self{depthup},
+             "o|depthdown=s"   => \$self{depthdown},
 			 "f|filename=s"     => \$self{filename},
 			 "F|format=s"       => \$self{format},
 			 "D|direction=s"    => \$self{direction},
@@ -60,11 +67,18 @@ my $ui = Netdot::UI->new();
 
 my $device_obj = Device->search(name=>$self{root})->first
     || die "Cannot find root device: $self{root}";
+my $start_obj = Device->search(name=>$self{start})->first
+    || die "Cannot find root device: $self{start}";
 
-my $id    = $device_obj->id;
+my $rid    = $device_obj->id;
+my $sid    = $start_obj->id;
 my $start = time;
-$ui->build_device_topology_graph(id            => $id, 
+
+$ui->build_device_topology_graph(id            => $sid, 
+                 root          => $rid,
 				 depth         => $self{depth}, 
+                 depthup       => $self{depthup}, 
+                 depthdown     => $self{depthdown}, 
 				 show_vlans    => $self{vlans}, 
 				 specific_vlan => $self{specific}, 
 				 show_names    => $self{names},
