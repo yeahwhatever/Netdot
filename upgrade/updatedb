@@ -325,6 +325,9 @@ if ($netdot_config->get('DB_TYPE') eq "mysql") {
 	    "ALTER TABLE bgppeering MODIFY COLUMN max_v4_prefixes int(11) NOT NULL;",
 	    "ALTER TABLE bgppeering MODIFY COLUMN max_v6_prefixes int(11) NOT NULL;",
 	    
+	    # Timestamps
+	    "ALTER TABLE backbonecable_history MODIFY COLUMN modified SET DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP;""
+	    
             );
 } elsif ($netdot_config->get('DB_TYPE') eq "Pg") {
     @statements = (
