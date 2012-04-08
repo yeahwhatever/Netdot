@@ -97,7 +97,7 @@ $meta = {
         length => '',
         nullable => 0,
         tag => 'Object ID',
-        type => 'integer'
+        type => 'bigint'
       },
     },
     description => 'Acess rights for Netdot authorization.  Rights are tied to individual users (Person objects) or groups (Contact List objects)',
