@@ -501,6 +501,10 @@ if ($netdot_config->get('DB_TYPE') eq "mysql") {
     foreach ( @schema ){
         if ( /^CREATE TABLE `(\S+)`/ ){
             $fk_table = $1;
+	} elsif ( /^\s*KEY/  {
+            $_ =~ s/^\s+//; # Remove leading spaces
+                $_ =~ s/,$//;   # Remove last comma
+                push @statements, "ALTER TABLE $fk_table ADD $_;";
         }elsif ( /CONSTRAINT/ ){
             $_ =~ s/^\s+//; # Remove leading spaces
                 $_ =~ s/,$//;   # Remove last comma
