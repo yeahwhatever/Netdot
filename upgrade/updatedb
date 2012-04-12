@@ -286,6 +286,7 @@ if ($netdot_config->get('DB_TYPE') eq "mysql") {
             "ALTER TABLE product_history ADD COLUMN part_number varchar(255);",
             "ALTER TABLE product_history ADD COLUMN config_type varchar(255);",
             "ALTER TABLE interface MODIFY COLUMN speed bigint;",
+            "ALTER TABLE interface_history MODIFY COLUMN speed bigint;",
             "ALTER TABLE datacache MODIFY COLUMN tstamp bigint NOT NULL;",
             "DELETE FROM datacache;",
             "ALTER TABLE device ADD COLUMN snmp_conn_attempts integer;",
@@ -319,9 +320,6 @@ if ($netdot_config->get('DB_TYPE') eq "mysql") {
 	    "ALTER TABLE accessright MODIFY COLUMN object_id integer;",
 	    "ALTER TABLE asset DROP KEY asset2;",
 	    "ALTER TABLE asset ADD UNIQUE KEY asset2 (product_id, serial_number);",
-	    "ALTER TABLE backbonecable_history MODIFY COLUMN end_closet bigint(20) NOT NULL;",
-	    "ALTER TABLE backbonecable_history MODIFY COLUMN start_closet bigint(20) NOT NULL;",
-	    "ALTER TABLE backbonecable_history MODIFY COLUMN type bigint(20) NOT NULL;",
 	    "ALTER TABLE bgppeering MODIFY COLUMN max_v4_prefixes int(11) NOT NULL;",
 	    "ALTER TABLE bgppeering MODIFY COLUMN max_v6_prefixes int(11) NOT NULL;",
 	    
