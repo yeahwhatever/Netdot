@@ -23,3 +23,8 @@ tasks:
 	@echo	
 	@echo "Performing various upgrade tasks"
 	$(PERL) upgrade-tasks $(PREFIX)
+
+notnull:
+	@echo
+	@echo "Adding NOT NULL constraints"
+	$(PERL) fix_not_null.pl
