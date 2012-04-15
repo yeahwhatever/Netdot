@@ -324,7 +324,7 @@ if ($netdot_config->get('DB_TYPE') eq "mysql") {
 	    "ALTER TABLE bgppeering MODIFY COLUMN max_v6_prefixes int(11) NOT NULL;",
 	    
 	    # FK Indexes
-	    "ALTER TABLE backbonecable_history ADD KEY owner;",
+	    "ALTER TABLE backbonecable_history ADD KEY (owner);",
 	    
             );
 } elsif ($netdot_config->get('DB_TYPE') eq "Pg") {
