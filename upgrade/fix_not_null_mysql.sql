@@ -26,6 +26,8 @@ ALTER TABLE fwtableentry MODIFY interface bigint NOT NULL;
 ALTER TABLE rrptr MODIFY rr bigint NOT NULL;
 ALTER TABLE bgppeering MODIFY bgppeerid varchar(64) NOT NULL;
 ALTER TABLE bgppeering MODIFY bgppeeraddr varchar(64) NOT NULL;
+ALTER TABLE bgppeering MODIFY max_v4_prefixes int(11) NOT NULL;
+ALTER TABLE bgppeering MODIFY max_v6_prefixes int(11) NOT NULL;
 ALTER TABLE devicecontacts MODIFY contactlist bigint NOT NULL;
 ALTER TABLE devicecontacts MODIFY device bigint NOT NULL;
 ALTER TABLE dhcpscopeuse MODIFY template bigint NOT NULL;

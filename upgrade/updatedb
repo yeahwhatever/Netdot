@@ -317,7 +317,7 @@ if ($netdot_config->get('DB_TYPE') eq "mysql") {
             "ALTER TABLE savedqueries MODIFY COLUMN querytext text;",
 
 	    # Joe
-	    "ALTER TABLE accessright MODIFY COLUMN object_id integer;",
+	    "ALTER TABLE accessright MODIFY COLUMN object_id bigint;",
 	    "ALTER TABLE asset DROP KEY asset2;",
 	    "ALTER TABLE asset ADD UNIQUE KEY asset2 (product_id, serial_number);",
 	    "ALTER TABLE bgppeering MODIFY COLUMN max_v4_prefixes int(11) NOT NULL;",
@@ -328,6 +328,8 @@ if ($netdot_config->get('DB_TYPE') eq "mysql") {
 	    "ALTER TABLE backbonecable_history ADD KEY (start_closet);",
 	    "ALTER TABLE backbonecable_history ADD KEY (end_closet);",
 	    "ALTER TABLE backbonecable_history ADD KEY (type);",
+	    "ALTER TABLE backbonecable_history ADD KEY (monitorstatus);",
+	    "ALTER TABLE backbonecable_history ADD KEY (entity);",
 	    "ALTER TABLE backbonecable ADD KEY (owner);",
 	    "ALTER TABLE backbonecable ADD KEY (type);",
 	    "ALTER TABLE cablestrand ADD KEY (fiber_type);",
@@ -350,6 +352,26 @@ if ($netdot_config->get('DB_TYPE') eq "mysql") {
 	    "ALTER TABLE contact_history ADD KEY (person);",
 	    "ALTER TABLE contact_history ADD KEY (contactlist);",
 	    "ALTER TABLE contact_history ADD KEY (contacttype);",
+	    "ALTER TABLE device ADD KEY (monitorstatus);",
+	    "ALTER TABLE device ADD KEY (room);",
+	    "ALTER TABLE device ADD KEY (site);",
+	    "ALTER TABLE device DROP KEY Device12;"
+	    "ALTER TABLE device ADD KEY (snmp_target);",
+	    "ALTER TABLE device ADD UNIQUE KEY device2 (asset_id);",
+	    "ALTER TABLE device DROP KEY Device4;"
+	    "ALTER TABLE device ADD KEY Device3 (used_by);",
+	    "ALTER TABLE device DROP KEY Device6;"
+	    "ALTER TABLE device ADD KEY Device4 (owner);",
+	    "ALTER TABLE device DROP KEY Device7;"
+	    "ALTER TABLE device ADD KEY Device5 (os);",
+	    "ALTER TABLE device DROP KEY Device8;"
+	    "ALTER TABLE device ADD KEY Device6 (sysname);",
+	    "ALTER TABLE device DROP KEY Device9;"
+	    "ALTER TABLE device ADD KEY Device7 (down_from);",
+	    "ALTER TABLE device DROP KEY Device10;"
+	    "ALTER TABLE device ADD KEY Device8 (down_until);",
+	    "ALTER TABLE device DROP KEY Device13;"
+	    "ALTER TABLE device ADD KEY Device9 (extension);",
 	    "ALTER TABLE device_history ADD KEY (asset_id);",
 	    "ALTER TABLE device_history ADD KEY (monitorstatus);",
 	    "ALTER TABLE device_history ADD KEY (name);",
@@ -362,6 +384,9 @@ if ($netdot_config->get('DB_TYPE') eq "mysql") {
 	    "ALTER TABLE dhcpscope ADD KEY (container);",
 	    "ALTER TABLE entity ADD KEY (availability);",
 	    "ALTER TABLE entity ADD KEY (contactlist);",
+	    "ALTER TABLE entity DROP KEY Entity2;",
+	    "ALTER TABLE entity DROP KEY Entity5;",
+	    "ALTER TABLE entity ADD UNIQUE KEY entity2 (oid);",
 	    "ALTER TABLE entity_history ADD KEY (contactlist);",
 	    "ALTER TABLE entity_history ADD KEY (availability);",
 	    "ALTER TABLE horizontalcable ADD KEY (contactlist);",
