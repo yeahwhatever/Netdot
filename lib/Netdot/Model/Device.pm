@@ -110,11 +110,11 @@ sub search {
 				if ( my $ip = Ipblock->search(address=>$ip)->first ){
 				    if ( $ip->interface && ($dev = $ip->interface->device) ){
 					$argv{name} = $dev->name;
-				    }elsif ( my @arecords = $ip->arecords ){
+				    }elsif ( my @a_records = $ip->a_records ){
 					# The IP is not assigned to any device interfaces
 					# but there might be a device with a name and A record
 					# associated with this IP
-					$argv{name} = $arecords[0]->rr;
+					$argv{name} = $a_records[0]->rr;
 				    }else{
 					$argv{name} = 0;
 				    }
@@ -2201,7 +2201,7 @@ sub delete {
     $self->SUPER::delete();
     
     if ( my $rr = RR->retrieve($rrid) ){
-	$rr->delete() unless $rr->arecords;
+	$rr->delete() unless $rr->a_records;
     }
     
     return 1;
@@ -2268,7 +2268,7 @@ sub product {
 sub fqdn {
     my $self = shift;
     $self->isa_object_method('fqdn');
-    return $self->name->get_label;
+    $self->name && return $self->name->get_label;
 }
 
 ############################################################################
@@ -5285,9 +5285,15 @@ sub _update_modules {
 					    serial_number => $serial,
 					   });
 	    
+	    $logger->debug("$host: module $number ($show_name) has asset: ". 
+			  $asset->get_label);
+
 	    # Clear reservation comment as soon as hardware gets installed
 	    $asset->update({reserved_for => ""});
 	    $mod_args{asset_id} = $asset->id;
+	}else{
+	    # If there's an asset then we probably need to remove it
+	    $mod_args{asset_id} = undef;
 	}
 
 	# See if it exists

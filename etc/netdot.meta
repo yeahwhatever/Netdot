@@ -415,7 +415,7 @@ $meta = {
     },
     description => 'Assets represent network hardware (devices or modules). If an asset is installed, it will be associated with a device or devicemodule object.',
     has_history => 0,
-    index => [ ['product_id'], ['inventory_number'], ['po_number'] ],
+    index => [ ['serial_number'], ['inventory_number'], ['po_number'] ],
     isjoin => '0',
     primary_key => 'id',
     label => ['product_id', 'serial_number', 'physaddr'],
@@ -5955,7 +5955,7 @@ $meta = {
         length => '',
         linksto => {
           cascade => 'Delete',
-          method => 'arecords',
+          method => 'a_records',
           table => 'Ipblock'
         },
         nullable => 0,
@@ -5968,7 +5968,7 @@ $meta = {
         length => '',
         linksto => {
           cascade => 'Delete',
-          method => 'arecords',
+          method => 'a_records',
           table => 'RR'
         },
         nullable => 0,

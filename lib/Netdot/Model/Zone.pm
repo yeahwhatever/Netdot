@@ -156,19 +156,9 @@ sub insert {
 
     my $newzone;
     if ( $argv->{template} ){
-	my $tzone; # For template zone object
-	
-	if ( ref($argv->{template}) eq 'Netdot::Model::Zone' ){
-	    $tzone = $argv->{template};
-	}elsif ( $argv->{template} =~ /\D+/ ){
-	    # Probably a name
-	    $tzone = Zone->search(name=>$argv->{template}) ||
-		$class->throw_user("Cannot find Zone called ".$argv->{template});
-	}else{
-	    # Probably an ID
-	    $tzone = Zone->retrieve($argv->{template}) ||
-		$class->throw_user("Cannot retrieve Zone id: ".$argv->{template});
-	}
+
+	my $tzone = $class->objectify($argv->{template}) || 
+	    $class->throw_user("Cannot determine Zone object from template: ".$argv->{template});
 	
 	my %state = (
 	    name        => $argv->{name},
@@ -227,7 +217,45 @@ sub insert {
     }
 
     $newzone->update_serial();
+
+    # Create PTR records if necessary
+    $newzone->is_dot_arpa() && $newzone->add_ptrs();
+
     return $newzone;
+}
+
+############################################################################
+=head2 - add_ptrs - Given a .arpa zone, add all the missing PTR records
+
+  Args: 
+    None
+  Returns: 
+    True
+  Examples:
+    $newzone->add_ptrs() if $newzone->is_dot_arpa();
+
+=cut
+sub add_ptrs {
+    my ($self) = @_;
+    $self->isa_object_method('add_ptrs');
+    my $class = ref($self);
+
+    if ( !$self->is_dot_arpa ){
+	$self->throw_user("I can only update PTRs on a .arpa zone");
+    }
+
+    my $block = $class->_dot_arpa_to_ip($self->name);
+    if ( my $ipb = Ipblock->search(address=>$block)->first ){
+	foreach my $ip ( @{$ipb->get_descendants} ){
+	    if ( $ip->is_address && $ip->a_records ){
+		foreach my $ar ( $ip->a_records ){
+		    $logger->debug("Adding/updating PTR record for ".$ip->address);
+		    $ar->update_rrptr();
+		}
+	    }
+	}
+    }
+    1;
 }
 
 ############################################################################
@@ -258,6 +286,41 @@ sub objectify {
 
 =head1 INSTANCE METHODS
 =cut
+
+#########################################################################
+=head2 update - Update Zone object
+
+    Override the base method to:
+    - Update PTR records if zone name changes
+    
+  Args: 
+    Hashref of zone fields
+  Returns: 
+    See Netdot::Model::update()
+  Examples:
+    $zone->update(\%args);
+
+=cut
+sub update {
+    my ($self, $argv) = @_;
+    $self->isa_object_method('update');
+
+    my $update_ptrs = 0;
+    if ( $argv->{name} && $argv->{name} ne $self->name ){
+	# We want to do this after the zone is updated
+	$update_ptrs = 1;
+    }
+
+    my @res =  $self->SUPER::update($argv);
+
+    if ( $update_ptrs ){
+	foreach my $rr ( $self->records ){
+	    $rr->update_ptr();
+	}
+    }
+    return @res;
+}
+
 
 #########################################################################
 =head2 as_text
@@ -679,32 +742,11 @@ sub import_records {
 	    }
 	}elsif ( $rr->type eq 'PTR' ){
 	    my $rrptr;
-	    my $prefix = $domain;
-	    my $ipversion;
-	    if ( $prefix =~ s/(.*)\.in-addr.arpa/$1/ ){
-		$ipversion = 4;
-	    }elsif ( $prefix =~ s/(.*)\.ip6.arpa/$1/ ){
-		$ipversion = 6;
-	    }
 
-	    my $ipaddr = "$name.$prefix";
-	    
-	    if ( $ipversion eq '4' ){
-		$ipaddr = join '.', (reverse split '\.', $ipaddr);
-	    }elsif ( $ipversion eq '6' ){
-		my @n = reverse split '\.', $ipaddr;
-		my @g; my $m;
-		for (my $i=1; $i<=scalar(@n); $i++){
-		    $m .= $n[$i-1];
-		    if ( $i % 4 == 0 ){
-			push @g, $m;
-			$m = "";
-		    }
-		}
-		$ipaddr = join ':', @g;		
-	    }
+	    my $ipaddr = $self->_dot_arpa_to_ip("$name.$domain");
 	    
 	    $logger->debug("$domain: Inserting Ipblock $ipaddr");
+
 	    my $ipb;
 	    if ( $ipb = Ipblock->search(address=>$ipaddr)->first ){
 		$ipb->update({status=>'Static'})
@@ -805,8 +847,8 @@ sub get_hosts {
                               ip.id, ip.address, ip.version, 
                               rrptr.ptrdname, zone.name, zone.id
               FROM            zone, rr
-              LEFT OUTER JOIN (ipblock ip CROSS JOIN rrptr) ON (rr.id=rrptr.rr AND ip.id=rrptr.ipblock)
-              LEFT OUTER JOIN (ipblock subnet) ON ip.parent=subnet.id
+              LEFT OUTER JOIN (ipblock AS ip CROSS JOIN rrptr) ON (rr.id=rrptr.rr AND ip.id=rrptr.ipblock)
+              LEFT OUTER JOIN ipblock AS subnet ON ip.parent=subnet.id
               WHERE           rr.zone=zone.id AND zone.id=$id";
 
     }else{
@@ -814,8 +856,8 @@ sub get_hosts {
                               ip.id, ip.address, ip.version, 
                               physaddr.id, physaddr.address, zone.name, zone.id
               FROM            zone, rr
-              LEFT OUTER JOIN (ipblock ip CROSS JOIN rraddr)  ON (rr.id=rraddr.rr AND ip.id=rraddr.ipblock)
-              LEFT OUTER JOIN (ipblock subnet) ON ip.parent=subnet.id
+              LEFT OUTER JOIN (ipblock AS ip CROSS JOIN rraddr)  ON (rr.id=rraddr.rr AND ip.id=rraddr.ipblock)
+              LEFT OUTER JOIN ipblock AS subnet ON ip.parent=subnet.id
               LEFT OUTER JOIN (physaddr CROSS JOIN dhcpscope) ON (dhcpscope.ipblock=ip.id AND dhcpscope.physaddr=physaddr.id)
               WHERE           rr.zone=zone.id AND zone.id=$id";
 
@@ -854,6 +896,64 @@ sub is_dot_arpa {
 # Private Methods
 #
 ############################################################################
+
+
+############################################################################
+#_dot_arpa_to_ip - Convert a .arpa string into an IPv4 or IPv6 address
+#
+#  Arguments: 
+#    .arpa string (*.in-addr.arpa or *.ip6.arpa)
+#  Returns: 
+#    IP or block address in CIDR format
+#  Examples:
+#    my $cidr = Zone->_dot_arpa_to_ip("4.3.2.1.in-addr.arpa");
+#    $cidr == 1.2.3.4/32
+#
+
+sub _dot_arpa_to_ip {
+    my ($class, $ipaddr) = @_;
+
+    my $version;
+    if ( $ipaddr =~ s/(.*)\.in-addr.arpa$/$1/ ){
+	$version = 4;
+    }elsif ( $ipaddr =~ s/(.*)\.ip6.arpa$/$1/ ){
+	$version = 6;
+    }
+
+    my $plen; # prefix length
+    if ( $version == 4 ){
+	my @octets = (reverse split '\.', $ipaddr);
+	$ipaddr = join '.', @octets;
+	$plen = scalar(@octets) * 8;
+	if ( $plen == 24 ){
+	    $ipaddr .= '.0';
+	}elsif ( $plen == 16 ){
+	    $ipaddr .= '.0.0';
+	}elsif ( $plen == 8 ){
+	    $ipaddr .= '.0.0.0';
+	}
+    }elsif ( $version == 6 ){
+	my @n = reverse split '\.', $ipaddr;
+	$plen = scalar(@n) * 4; # each nibble is 4 bits
+	my @g; my $m;
+	for (my $i=1; $i<=scalar(@n); $i++){
+	    $m .= $n[$i-1];
+	    if ( $i % 4 == 0 ){
+		push @g, $m;
+		$m = "";
+	    }
+	}
+	$ipaddr = join ':', @g;
+	if ( $plen < 128 ){
+	    $ipaddr .= '::';  # or it won't validate
+	}
+    }
+    if ( Ipblock->validate($ipaddr, $plen) ){
+	return ("$ipaddr/$plen");
+    }else{
+	$class->throw_user(sprintf("Invalid IP address: %s/%d", $ipaddr, $plen));
+    }
+}
 
 ############################################################################
 #_dateserial - Get date in 'DNS zone serial' format

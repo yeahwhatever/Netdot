@@ -78,7 +78,7 @@ sub insert {
 	if ( $current_status eq 'Available' || $current_status eq 'Discovered' );
     
     # Create/update PTR record for this IP
-    $rraddr->_update_rrptr() if $update_ptr;
+    $rraddr->update_rrptr() if $update_ptr;
     
     return $rraddr;
     
@@ -123,7 +123,7 @@ sub update {
 
     my @res = $self->SUPER::update($argv);
 
-    $self->_update_rrptr() if $update_ptr;
+    $self->update_rrptr() if $update_ptr;
 
     return @res;
 }
@@ -160,7 +160,7 @@ sub delete {
 	$ptr->rr->delete();
     }
     
-    if ( !$ipblock->arecords ){
+    if ( !$ipblock->a_records ){
 	# This IP has no more A records
 
 	# Remove any dhcp host scopes
@@ -174,9 +174,24 @@ sub delete {
 	}
     }
 
-    # If RR has no more A/AAAA records, MX records, or devices
+    # If RR has no more associated records or devices
     # it should be deleted
-    $rr->delete() unless ( $rr->arecords || $rr->mx_records || $rr->devices);
+    # However, if it has MX records, check if they point
+    # to something else, or just to itself. In the latter case
+    # it must be deleted too.
+
+    if ( !$rr->a_records && !$rr->ns_records && !$rr->devices ){
+	my $deleteme = 1;
+	if ( $rr->mx_records ) {
+	    foreach my $mx ( $rr->mx_records ) {
+		if ( $mx->exchange ne $rr->get_label ){
+		    $deleteme = 0;
+		    last;
+		}
+	    }
+	}
+	$rr->delete if $deleteme;
+    }
 
     return 1;
 }
@@ -203,20 +218,23 @@ sub as_text {
 }
 
 
-
-
-##################################################################
-# Private methods
-##################################################################
-
 ############################################################################
-#
-# When an RRADDR record is inserted or updated, we can automatically
-# update the corresponding PTR record if told to do so
-#
-sub _update_rrptr {
+=head2 update_rrptr - Update PTR record corresponding to a A/AAAA record
+
+ When an RRADDR record is inserted or updated, we can automatically
+ update the corresponding PTR record if told to do so
+
+  Arguments:
+    None
+  Returns:
+    True
+  Examples:
+    $rraddr->update_rrptr();
+
+=cut
+sub update_rrptr {
     my ($self) = @_;
-    $self->isa_object_method('_update_rrptr');
+    $self->isa_object_method('update_rrptr');
 
     my $rrptr;
     if ( !($rrptr = ($self->ipblock->ptr_records)[0]) ){
@@ -228,12 +246,18 @@ sub _update_rrptr {
 				    zone     => $rev_zone,
 				    ttl      => $self->ttl});
 	}else{
-	    $logger->warn("Netdot::Model::RRADDR::_update_rrptr: Ipblock: "
+	    $logger->warn("Netdot::Model::RRADDR::update_rrptr: Ipblock: "
 			  .$self->ipblock->get_label." reverse zone not found");
 	}
     }
     return 1;
 }
+
+
+
+##################################################################
+# Private methods
+##################################################################
 
 
 ##################################################################

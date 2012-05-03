@@ -678,6 +678,18 @@ sub insert {
 	$args{values} = join ',', map { "'$_'" } @values if @values;
 	$newblock->_host_audit(%args);
     }
+
+    # Reserve first or last N addresses
+    if ( !$newblock->is_address && $newblock->status->name eq 'Subnet' ){
+	my $num = $class->config->get('SUBNET_AUTO_RESERVE');
+	if ( $num > 0 ){
+	    for ( 1..$num ){
+		my $addr = $newblock->get_next_free();
+		$class->insert({address=>$addr, status=>'Reserved'});
+	    }
+	}
+    }
+
     return $newblock;
 }
 
@@ -984,51 +996,40 @@ sub fast_update{
 			  $attrs->{status}, $attrs->{timestamp}, $attrs->{timestamp});
 	}
     }else{
-	my $db_ips  = $class->retrieve_all_hashref;
 
 	# Build SQL queries
-	my $sth1 = $dbh->prepare_cached("UPDATE ipblock SET last_seen=?
-                                          WHERE id=?");	
+	my $sth1 = $dbh->prepare_cached("UPDATE ipblock SET last_seen=? WHERE address=?");	
 	
 	my $sth2 = $dbh->prepare_cached("INSERT INTO ipblock 
                                           (address,prefix,version,status,first_seen,last_seen)
                                            VALUES (?, ?, ?, ?, ?, ?)");
 	
-	# Now walk our list and do the right thing
+	# Now walk our list
 	foreach my $address ( keys %$ips ){
 	    my $attrs = $ips->{$address};
 	    # Convert address to decimal format
 	    my $dec_addr = $class->ip2int($address);
 	    
-	    if ( exists $db_ips->{$dec_addr} ){
-		# IP exists
-		eval{
-		    $sth1->execute($attrs->{timestamp}, $db_ips->{$dec_addr});
-		};
-		if ( my $e = $@ ){
-		    $class->throw_fatal($e);
-		}
-	    }else{
-		# IP does not exist
-		eval{
-		    $sth2->execute($dec_addr, $attrs->{prefix}, $attrs->{version},
-				   $attrs->{status}, $attrs->{timestamp}, $attrs->{timestamp},
-			);
-		};
-		if ( my $e = $@ ){
-		    if ( $e =~ /Duplicate/ ){
-			# Since we're parallelizing, an address
-			# might get inserted after we get our list.
-			# Just go on.
-			next;
-		    }else{
+	    eval {
+		$sth2->execute($dec_addr, $attrs->{prefix}, $attrs->{version},
+			       $attrs->{status}, $attrs->{timestamp}, $attrs->{timestamp},
+		    );
+	    };
+	    if ( my $e = $@ ){
+		if ( $e =~ /Duplicate/i ){
+		    eval {
+			$sth1->execute($attrs->{timestamp}, $dec_addr);
+		    };
+		    if ( my $e = $@ ){
 			$class->throw_fatal($e);
 		    }
+		}else{
+		    $class->throw_fatal($e);
 		}
 	    }
 	}
     }
-
+    
     my $end = time;
     $logger->debug(sub{ sprintf("Ipblock::fast_update: Done Updating: %d addresses in %s",
 				scalar(keys %$ips), $class->sec2dhms($end-$start)) });
@@ -1651,19 +1652,23 @@ sub get_ancestors {
 }
 
 ##################################################################
-=head2 get_descendants - Get children recursively
-    
+=head2 get_descendants_trie - Get descendants using Trie traversal
+
+    Notice that this will not return addresses, since we do
+    not add the end nodes to the trie. Use get_descendants()
+    instead.
+
  Arguments: 
     None
  Returns:   
     arrayref of descendant children IDs
   Examples:
-    my $descendants = $ip->get_descendants();
+    my $descendants = $ip->get_descendants_trie();
 
 =cut
-sub get_descendants {
+sub get_descendants_trie {
     my ($self, $t) = @_;
-    $self->isa_object_method('get_descendants');
+    $self->isa_object_method('get_descendants_trie');
     my $class = ref($self);
    
     my $tree = $self->_tree_get();
@@ -1683,6 +1688,28 @@ sub get_descendants {
 }
 
 ##################################################################
+=head2 get_descendants - Get children recursively
+
+
+ Arguments: 
+    None
+ Returns:   
+    Arrayref of Ipblock objects
+  Examples:
+    my $desc = $block->get_descendants();
+
+=cut
+sub get_descendants {
+    my ($self, $children) = @_;
+
+    foreach my $ch ( $self->children ){
+	push @$children, $ch;
+	$ch->get_descendants($children);
+    }
+    return $children;
+}
+
+##################################################################
 =head2 num_addr - Return the number of usable addresses in a subnet
 
  Arguments:
@@ -1699,12 +1726,12 @@ sub num_addr {
     my $class = ref($self);
     
     if ( $self->version == 4 ) {
-	if ( $self->prefix < 31 ){
+	my $num = $class->numhosts($self->prefix);
+	if ( $self->prefix < 31 && $self->status->name eq 'Subnet' ){
 	    # Subtract network and broadcast addresses
-	    return $class->numhosts($self->prefix) - 2;
-	}else{
-	    return $class->numhosts($self->prefix);
+	    $num = $num - 2;
 	}
+	return $num;
     }elsif ( $self->version == 6 ) {
 	# Notice that the first (subnet-router anycast) and last address 
 	# are valid in IPv6
@@ -1973,11 +2000,11 @@ sub update_a_records {
     # give admin more flexibility
     my $name = $ip_name_plugin->get_name( $self );
 
-    my @arecords = $self->arecords;
+    my @a_records = $self->a_records;
 
     my %rrstate = (name=>$name, zone=>$zone, auto_update=>1);
 
-    if ( ! @arecords  ){
+    if ( ! @a_records  ){
 	# No A records exist for this IP yet.
 
 	# Is this the only ip in this device,
@@ -2007,13 +2034,13 @@ sub update_a_records {
 	}
     }else{ 
 	# "A" records exist.  Update names
-	if ( (scalar @arecords) > 1 ){
+	if ( (scalar @a_records) > 1 ){
 	    # There's more than one A record for this IP
 	    # To avoid confusion, don't update and log.
 	    $logger->warn(sprintf("%s: IP %s has more than one A record. Will not update name.", 
 				  $host, $self->address));
 	}else{
-	    my $ar = $arecords[0];
+	    my $ar = $a_records[0];
 	    my $rr = $ar->rr;
 
 	    # User might not want this updated
@@ -2046,7 +2073,7 @@ sub update_a_records {
 							    $host, $name, $self->address)} );
 				
 				# And get rid of the old name
-				$rr->delete() unless $rr->arecords;
+				$rr->delete() unless $rr->a_records;
 			    }
 			}else{
 			    # The desired name does not exist
@@ -2636,7 +2663,7 @@ sub get_next_free {
 	if ( my $ipb = Ipblock->search(address=>$addr, version=>$version)->first ){
 	    # IP may have been incorrectly set as Available
 	    # Correct and move on
-	    if ( $ipb->arecords || $ipb->dhcp_scopes ){
+	    if ( $ipb->a_records || $ipb->dhcp_scopes ){
 		$ipb->update({status=>'Static'});
 		return undef;
 	    }
@@ -2675,12 +2702,13 @@ sub get_addresses_by {
     }
     my $id = $self->id;
     my $query = "    
-    SELECT    DISTINCT(ipblock.id)
+    SELECT    ipblock.id
     FROM      ipblockstatus, ipblock 
-    LEFT JOIN (rraddr, rr) ON (rraddr.ipblock=ipblock.id AND rraddr.rr=rr.id)
+    LEFT JOIN (rraddr CROSS JOIN rr) ON (rraddr.ipblock=ipblock.id AND rraddr.rr=rr.id)
     LEFT JOIN entity ON (ipblock.used_by=entity.id)
     WHERE     ipblock.parent=$id
       AND     ipblock.status=ipblockstatus.id
+    GROUP BY  ipblock.id
     ORDER BY  $sort2field{$sort}";
 
     my $dbh  = $self->db_Main();
@@ -2818,7 +2846,7 @@ sub _validate {
 	unless ( $self->is_address($self) ){
 	    $self->throw_user($self->get_label.": Only addresses can be set to Available");
 	}
-	if ( $self->arecords || $self->dhcp_scopes ){
+	if ( $self->a_records || $self->dhcp_scopes ){
 	    $self->throw_user($self->get_label.": Available addresses cannot have A records or DHCP scopes");
 	}
     }
