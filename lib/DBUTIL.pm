@@ -321,7 +321,7 @@ sub insert_oui{
     }
     close (OUI);
 
-    @data = (); 
+    @data = ();
     $oui_file = "/tmp/oui.txt";
     open (OUI, ">:encoding(iso-8859-1)",$oui_file) or die "Can't open $oui_file: $!\n";
     foreach my $oui ( keys %oui ){
@@ -330,12 +330,13 @@ sub insert_oui{
         $oui = uc($oui);
         print "$oui : $vendor\n" if $CONFIG{DEBUG};
         print OUI "$oui\t$vendor\n";
-    }   
+	if (lc($CONFIG{DB_TYPE}) eq 'mysql') {
+	    push @data, "INSERT INTO oui (oui, vendor) VALUES ('$oui', '$vendor');";
+	}
+    } 
     close(OUI);
 
-    if (lc($CONFIG{DB_TYPE}) eq 'mysql') {
-        push @data, "LOAD DATA LOCAL INFILE '$oui_file' INTO TABLE oui (oui, vendor);";
-    } elsif (lc($CONFIG{DB_TYPE}) eq 'postgres') {
+    if (lc($CONFIG{DB_TYPE}) eq 'postgres') {
         push @data, "COPY oui(oui, vendor) FROM '$oui_file';"
     }   
     &db_query(\@data);
