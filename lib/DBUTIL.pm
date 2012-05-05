@@ -48,7 +48,11 @@ sub build_dsn {
     $dsn .= "dbname=$db_args{DB_DATABASE}";
     $dsn .= ";host=$db_args{DB_HOST}" if ($db_args{DB_HOST});
     $dsn .= ";port=$db_args{DB_PORT}" if ($db_args{DB_PORT});
-    $dsn .= ";mysql_local_infile=1";
+
+    if ($CONFIG{DB_TYPE} eq "mysql") {
+	$dsn .= ";mysql_local_infile=1";
+    }
+
     return $dsn;
 }
 
