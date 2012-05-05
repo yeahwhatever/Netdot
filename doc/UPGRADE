@@ -5,6 +5,10 @@ in addition to the application.
 
 IMPORTANT: MAKE SURE YOU MAKE A BACKUP COPY OF YOUR DATABASE BEFORE UPGRADING
 
+First, note that the DB_HOME setting in Default.conf and Site.conf has changed between 0.9 and 1.0.
+Previously, it was the directory your binaries lived in (e.g. /usr/bin), where as now it is one
+directory level higher (e.g. /usr). You will need to change this in Site.conf.
+
 After making a backup copy of your database, please execute the following command:
 
        make upgrade
