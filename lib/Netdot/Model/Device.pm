@@ -1902,7 +1902,7 @@ sub arp_update {
     my $timestamp = $argv{timestamp} || $self->timestamp;
 
     unless ( $self->collect_arp ){
-	$logger->debug(sub{"Device::arp_update: $host excluded from ARP collection. Skipping"});
+	$logger->debug(sub{"Device::arp_update: $host: Collect ARP option off. Skipping"});
 	return;
     }
     if ( $self->is_in_downtime ){
@@ -1993,7 +1993,7 @@ sub get_arp {
     my $host = $self->fqdn;
 
     unless ( $self->collect_arp ){
-	$logger->debug(sub{"Device::get_arp: $host excluded from ARP collection. Skipping"});
+	$logger->debug(sub{"Device::get_arp: $host: Collect ARP option off. Skipping"});
 	return;
     }
     if ( $self->is_in_downtime ){
@@ -2063,7 +2063,7 @@ sub fwt_update {
     my $timestamp = $argv{timestamp} || $self->timestamp;
     
     unless ( $self->collect_fwt ){
-	$logger->debug(sub{"Device::fwt_update: $host excluded from FWT collection. Skipping"});
+	$logger->debug(sub{"Device::fwt_update: $host: Collect FWT option off. Skipping"});
 	return;
     }
     if ( $self->is_in_downtime ){
@@ -2146,7 +2146,7 @@ sub get_fwt {
     my $fwt = {};
 
     unless ( $self->collect_fwt ){
-	$logger->debug(sub{"Device::get_fwt: $host excluded from FWT collection. Skipping"});
+	$logger->debug(sub{"Device::get_fwt: $host: Collect FWT option off. Skipping"});
 	return;
     }
     if ( $self->is_in_downtime ){
@@ -2577,19 +2577,19 @@ sub snmp_update {
 			      atomic    => $atomic,
 		);
 	}else{
-	    $logger->debug(sub{"Device::snmp_update: $host excluded from FWT collection. Skipping"});
+	    $logger->debug(sub{"Device::snmp_update: $host: Collect FWT option off. Skipping"});
 	    return;
 	}
     }
     if ( $argv{do_arp} ){
-	if ( $self->has_layer(3) && $self->collect_arp ){
+	if ( $self->collect_arp ){
 	    $self->arp_update(session        => $sinfo, 
 			      timestamp      => $timestamp,
 			      no_update_tree => $argv{no_update_tree},
 			      atomic         => $atomic,
 		);
 	}else{
-	    $logger->debug(sub{"Device::snmp_update: $host excluded from ARP collection. Skipping"});
+	    $logger->debug(sub{"Device::snmp_update: $host: Collect ARP option off. Skipping"});
 	    return;
 	}
     }
@@ -4122,19 +4122,19 @@ sub snmp_update_parallel {
 
 	if ( $args{do_info} ){
 	    unless ( $dev->canautoupdate ){
-		$logger->debug(sub{ sprintf("%s excluded from auto-updates", $dev->fqdn) });
+		$logger->debug(sub{ sprintf("%s: Auto Update option off", $dev->fqdn) });
 		$args{do_info} = 0;
 	    }
 	}
 	if ( $args{do_fwt} ){
 	    unless ( $dev->collect_fwt ){
-		$logger->debug(sub{ sprintf("%s excluded from FWT collection", $dev->fqdn) });
+		$logger->debug(sub{ sprintf("%s: Collect FWT option off", $dev->fqdn) });
 		$args{do_fwt} = 0;
 	    }
 	}
 	if ( $args{do_arp} ){
 	    unless ( $dev->collect_arp ){
-		$logger->debug(sub{ sprintf("%s excluded from ARP collection", $dev->fqdn) });
+		$logger->debug(sub{ sprintf("%s: Collect ARP option off", $dev->fqdn) });
 		$args{do_arp} = 0;
 	    }
 	}
@@ -4319,7 +4319,7 @@ sub _get_arp_from_snmp {
 	$devints{$int->number} = $int->id;
     }
     $logger->debug(sub{"$host: Fetching ARP cache via SNMP" });
-    my ( $at_paddr, $at_netaddr, $at_index );
+    my ( $at_paddr, $atnetaddr, $at_index );
     $at_paddr  = $sinfo->at_paddr();
 
     # With the following checks we are trying to query only one
@@ -4334,7 +4334,7 @@ sub _get_arp_from_snmp {
 	if ( !exists $devints{$idx} ){
 	    $use_shortcut = 0;
 	    $logger->debug(sub{"Device::_get_arp_from_snmp: $host: Not using ARP query shortcut"});
-	    $at_netaddr = $sinfo->at_netaddr();
+	    $atnetaddr = $sinfo->atnetaddr();
 	    $at_index   = $sinfo->at_index();
 	}
     }
@@ -4351,7 +4351,7 @@ sub _get_arp_from_snmp {
 	    }
 	}else{
 	    $idx = $at_index->{$key};
-	    $ip  = $at_netaddr->{$key};
+	    $ip  = $atnetaddr->{$key};
 	}
 	unless ( $ip && $idx && $mac ){
 	    $logger->debug(sub{"Device::_get_arp_from_snmp: $host: Missing information at row: $key" });
@@ -4436,7 +4436,7 @@ sub _validate_arp {
 	if ( Netdot->config->get('IGNORE_IPS_FROM_ARP_NOT_WITHIN_SUBNET') ){
 	    foreach my $ip ( $int->ips ){
 		next unless ($ip->version == $version);
-		push @{$devsubnets{$int->id}}, $ip->parent->_netaddr 
+		push @{$devsubnets{$int->id}}, $ip->parent->netaddr 
 		    if $ip->parent;
 	    }
 	}
@@ -4514,7 +4514,7 @@ sub _get_fwt_from_snmp {
     my $host = $self->fqdn;
 
     unless ( $self->collect_fwt ){
-	$logger->debug(sub{"Device::_get_fwt_from_snmp: $host excluded from FWT collection. Skipping"});
+	$logger->debug(sub{"Device::_get_fwt_from_snmp: $host: Collect FWT option off. Skipping"});
 	return;
     }
 
@@ -5051,18 +5051,18 @@ sub _assign_product {
     my ($self, $info) = @_;
     $self->throw_fatal("Invalid info hashref")
 	unless ( $info && ref($info) eq 'HASH' );
-    
-    my $prod;
-    $prod = Product->search(sysobjectid=>$info->{sysobjectid})->first
-	if ($info->{sysobjectid});
-    return $prod if $prod;
-   
-    $prod = Product->search(name=>$info->{model})->first 
-	if ($info->{model});
-    return $prod if $prod;	
-    
-    $prod = Product->search(name=>$info->{productname})->first 
-	if ($info->{productname});
+
+    # Build a query that tries to find any of these
+    # Notice that we use an array to mean "OR"
+    my @where;
+    push @where, { sysobjectid => $info->{sysobjectid} } if $info->{sysobjectid};
+    push @where, { part_number => $info->{model} }       if $info->{model};
+    my @names;
+    push @names, $info->{model}       if $info->{model};    
+    push @names, $info->{productname} if $info->{productname};    
+    push @where, { name => \@names }  if @names;
+    my $prod = Product->search_where(\@where)->first if @where;
+
     return $prod if $prod;	
     
     # Try to create it then
@@ -5082,7 +5082,6 @@ sub _assign_product {
     }
     $args{hostname} = $self->fqdn;
 
-    # We at least need a name
     if ( $args{name} ){
 	return Product->insert(\%args);
     }else{
@@ -5264,30 +5263,56 @@ sub _update_modules {
 	my $show_name = $mod_args{name} || $number;
 	# find or create asset object for given serial number and product
 	my $asset;
-	if ( (my $serial = delete $mod_args{serial_number}) && 
-	     (my $model = $mod_args{model}) ){
-	    if ( $serial =~ /^fill in/io || $model =~ /^fill in/io ){
+	if ( my $serial = delete $mod_args{serial_number} ){
+	    if ( $serial =~ /^fill in/io ){
 		# We've seen HP switches with "Fill in this information" 
 		# as value for S/N and model. Annoying.
 		next; 
 	    }
-	    # Find or create product
-	    my $product = Product->find_or_create({part_number  => $model,
-						   manufacturer => $mf,
-						  });
-	    if ( !$product->type || $product->type->name eq 'Unknown' ){
-		my $type = ProductType->find_or_create({name=>'Module'});
-		$product->update({type => $type});
-	    }
-	    
-	    # Find or create asset
-	    $asset = Asset->find_or_create({product_id    => $product,
-					    serial_number => $serial,
-					   });
-	    
-	    $logger->debug("$host: module $number ($show_name) has asset: ". 
-			  $asset->get_label);
+	    # Try to find the asset based on the serial and the 
+	    # manufacturer first. The reason is that model names
+	    # learned from device info can vary slightly
+	    # from the name in the module information
+	    $asset = Asset->search_sn_mf($serial, $mf)->first;
 
+	    if ( !$asset && (my $model = $mod_args{model}) ){
+		# Now, search for the asset based on the match
+		# of both the product and either the name or
+		# the part number
+
+		if ( $model =~ /^fill in/io ){
+		    next; 
+		}
+	
+		# Find or create product
+		my $product;
+		$product = Product->search_where({
+		    manufacturer => $mf,
+		    -or => [part_number => $model,  name => $model],
+						 })->first;
+		
+		$product ||= Product->insert({part_number  => $model,
+					      name         => $model,
+					      manufacturer => $mf,
+					     });
+		
+		if ( !$product->type || $product->type->name eq 'Unknown' ){
+		    my $type = ProductType->find_or_create({name=>'Module'});
+		    $product->update({type => $type});
+		}
+		
+		# Find or create asset
+		$asset = Asset->find_or_create({product_id    => $product,
+						serial_number => $serial,
+					       });
+		
+		$logger->debug("$host: module $number ($show_name) has asset: ". 
+			       $asset->get_label);
+	    }
+	}
+
+	# At this point we should have an asset object, but check
+	if ( $asset ){
 	    # Clear reservation comment as soon as hardware gets installed
 	    $asset->update({reserved_for => ""});
 	    $mod_args{asset_id} = $asset->id;
@@ -5296,7 +5321,7 @@ sub _update_modules {
 	    $mod_args{asset_id} = undef;
 	}
 
-	# See if it exists
+	# See if the module exists
 	my $module;
 	if ( exists $oldmodules{$number} ){
 	    $module = $oldmodules{$number};

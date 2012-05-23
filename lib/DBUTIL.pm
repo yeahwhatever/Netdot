@@ -12,11 +12,22 @@ $|=1; #unbuffer output.
 
 my %CONFIG;
 
+my $rel_dir = '../etc';
+my $abs_dir = '<<Make:ETC>>';
+
+if ( -d $abs_dir ){
+    $CONFIG{CONFIG_DIR} = $abs_dir;
+}elsif ( -d $rel_dir ){
+    $CONFIG{CONFIG_DIR} = $rel_dir;
+}else{
+    die "Cannot figure out which etc/ directory to use";
+}
+
 $CONFIG{DEBUG}        = 1;
 $CONFIG{PROMPT}       = 1; 
-$CONFIG{CONFIG_DIR}   = '../etc';
 $CONFIG{SCHEMA_FILE}  = "$CONFIG{CONFIG_DIR}/netdot.meta";
 $CONFIG{DEFAULT_DATA} = "$CONFIG{CONFIG_DIR}/default_data";
+
 
 my $netdot_config = Netdot::Config->new(config_dir => $CONFIG{CONFIG_DIR});
 
@@ -335,12 +346,12 @@ sub insert_oui{
         $oui = uc($oui);
         print "$oui : $vendor\n" if $CONFIG{DEBUG};
         print OUI "$oui\t$vendor\n";
-    } 
+    }
     close(OUI);
 
     if (lc($CONFIG{DB_TYPE}) eq 'mysql') {
 	push @data, "LOAD DATA LOCAL INFILE '$oui_file' INTO TABLE oui (oui, vendor);"
-    } elsif (lc($CONFIG{DB_TYPE}) eq 'postgres') {
+    } elsif (lc($CONFIG{DB_TYPE}) eq 'Pg') {
         push @data, "COPY oui(oui, vendor) FROM '$oui_file';"
     }   
     &db_query(\@data);
@@ -377,8 +388,15 @@ sub processdata {
 	$cmd  =~ /^(.*)$/;
 	chomp($cmd);
 	print "DEBUG: ($cmd): " if $CONFIG{DEBUG};
-	$rows = $dbh->do( $cmd );
-	print "rows affected: $rows\n" if $CONFIG{DEBUG};
+	eval {
+	    $rows = $dbh->do( $cmd );
+	};
+ 	if ( my $e = $@ ){
+ 	    # We will let the process continue
+	    warn "ERROR: $e\n";
+ 	}else{
+	    print "rows affected: $rows\n" if $CONFIG{DEBUG};
+	}
     }
     return 1;
 }

@@ -447,7 +447,7 @@ sub col_descr_link{
 sub help_link {
     my ($self, $url, $title, $size, $text) = @_;
     $title ||= 'Netdot Help Window';
-    $size  ||= 'width=600,height=400';
+    $size  ||= 'width=600,height=400,scrollbars=yes';
     $text  ||= '[?]';
     $self->throw_fatal("Missing required arguments: URL")
 	unless ($url);
@@ -1048,7 +1048,7 @@ sub text_area($@){
     my $value  = ($o ? $o->$column : "");
     my $name   = ( $shortFieldName ? $column : $table . "__" . $id . "__" . $column );
     #textareas need bigger space, so we'll specify a default htmlExtra
-    $htmlExtra = "cols='80' rows='10'" if (!$htmlExtra);
+    $htmlExtra = "cols='70' rows='10'" if (!$htmlExtra);
 
     $self->throw_fatal("Unable to determine table name. Please pass valid object and/or table name.\n")
 	unless ( $o || $table );
@@ -2310,7 +2310,7 @@ sub get_user_person {
 	    $self->throw_user("Unrecognized value for DEFAULT_REMOTE_AUTHED_USER_TYPE config option");
 	}
     }
-    $self->throw_user("Username $username not found in Person table");
+    $self->throw_user("Username $username not found");
     
 }
 

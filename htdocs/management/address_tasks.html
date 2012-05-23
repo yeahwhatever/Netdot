@@ -100,6 +100,11 @@ my $manager = $ui->get_permission_manager($r);
             </form>
         </fieldset>
 %   }elsif ( $view eq 'new' ){				     
+
+%       unless ( $manager && $manager->can($user, 'access_admin_section', 'address_tasks.html:new') ){
+%	    $m->comp('/generic/error.mhtml', error => "You do not have permission to add new blocks here");    
+%       }
+
         <fieldset class="large">
             <legend>Add IP Block</legend>
             <form action="ip.html" method="POST" name="ipblock">
@@ -181,7 +186,7 @@ my $manager = $ui->get_permission_manager($r);
 if ( $submit ){
     if ( $search_address ){
 	$search = $search_address;
-	$search =~ s/s+//g;
+	$search =~ s/\s+//g;
 	# These might throw exceptions
 	eval { @list = Ipblock->search(address=>$search) };
 	if ( my $e = $@ ){

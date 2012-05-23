@@ -75,8 +75,11 @@ my $range_dns_plugin = __PACKAGE__->load_range_dns_plugin();
 sub int2ip {
     my ($class, $address, $version) = @_;
     
-    if ( !defined($address) || !defined($version) ){
-	$class->throw_fatal(sprintf("Missing required arguments: address and/or version "));
+    unless ( defined($address) ) {
+	$class->throw_fatal(sprintf("Missing required argument: address"));
+    }
+    unless ( defined($version) ){
+	$class->throw_fatal(sprintf("Missing required argument: version "));
     }
     
     my $val;
@@ -413,7 +416,7 @@ sub get_unused_subnets {
 	my $ip = Ipblock->retrieve($id);
 	if ( defined $args{version} && $args{version} == 4 ){
 	    # Ignore IPv4 multicast blocks
-	    if ( $ip->_netaddr->within(new NetAddr::IP "224.0.0.0/4") ){
+	    if ( $ip->netaddr->within(new NetAddr::IP "224.0.0.0/4") ){
 		next;
 	    }
 	}
@@ -509,7 +512,7 @@ sub is_link_local{
     my $class = ref($self);
     my $ip;
     if ( $class ){
-	$ip = $self->_netaddr();
+	$ip = $self->netaddr();
     }else{
 	$self->throw_fatal("Missing required arguments: address")
 	    unless $address;
@@ -1128,27 +1131,35 @@ sub add_range{
     unless ( $ipstart && $ipend && ($ipstart <= $ipend) ){
 	$self->throw_user("Invalid range: $argv{start} - $argv{end}");
     }
-    my $np = $self->_netaddr();
+    my $np = $self->netaddr();
     unless ( $ipstart->within($np) && $ipend->within($np) ){
 	$self->throw_user("Start and/or end IPs not within this subnet: ".$self->get_label);
     }
     my $prefix  = ($self->version == 4)? 32 : 128;
 
     my @newips;
-    my %args = (status => $argv{status});
-    $args{used_by}        = $argv{used_by}     if $argv{used_by};
-    $args{description}    = $argv{description} if $argv{description};
-    $args{parent}         = $self->id;
-    $args{no_update_tree} = 1; 
-    $args{validate}       = 0; # Make it faster
+    my %args = (
+	status         => $argv{status},
+	parent         => $self->id,
+	validate       => 0, # Make it faster
+	no_update_tree => 1, # not necessary because we're passing parent id
+	);
+    $args{used_by}     = $argv{used_by}     if $argv{used_by};
+    $args{description} = $argv{description} if $argv{description};
+    # Below we make a copies of the args hash because
+    # passing by reference causes it to be modified by insert/update
+    # and that breaks the next cycle
     for ( my($ip) = $ipstart->copy; $ip <= $ipend; $ip++ ){
-	my $decimal = $ip->numeric; # Do not remove.  We need the method value as a scalar
+	my $decimal = $ip->numeric; # We need the scalar value
 	if ( my $ipb = Ipblock->search(address=>$decimal, prefix=>$prefix)->first ){
-	    $ipb->update(\%args);
+	    my %uargs = %args;
+	    $ipb->update(\%uargs);
 	    push @newips, $ipb;
 	}else{
-	    $args{address} = $ip->addr;
-	    push @newips, Ipblock->insert(\%args);
+	    my %iargs = %args;
+	    $iargs{address} = $ip->addr;
+	    $iargs{prefix}  = $prefix;
+	    push @newips, Ipblock->insert(\%iargs);
 	}
     }
     #########################################
@@ -1191,7 +1202,7 @@ sub remove_range{
     unless ( $ipstart && $ipend && ($ipstart <= $ipend) ){
 	$self->throw_user("Invalid range: $argv{start} - $argv{end}");
     }
-    my $np = $self->_netaddr();
+    my $np = $self->netaddr();
     unless ( $ipstart->within($np) && $ipend->within($np) ){
 	$self->throw_user("Start and/or end IPs not within this subnet: ".$self->get_label);
     }
@@ -1333,17 +1344,7 @@ sub objectify{
 sub address_numeric {
     my $self = shift;
     $self->isa_object_method('address_numeric');
-    my $dbh = $self->db_Main();
-    my $id = $self->id;
-    my $address;
-    eval {
-	($address) = $dbh->selectrow_array("SELECT address 
-                                            FROM ipblock 
-                                            WHERE id = $id");
-    };
-    if ( my $e = $@ ){
-	$self->throw_user( $e ) if ( $e );
-    }
+    my $address = ($self->_attrs('decimal'))[0];
     return $address;
 }
 
@@ -1389,7 +1390,7 @@ sub cidr {
 sub full_address {
     my $self = shift;
     $self->isa_object_method('full_address');
-    return $self->_netaddr->full()
+    return $self->netaddr->full()
 }
 
 ##################################################################
@@ -1484,9 +1485,9 @@ sub update {
     # We need at least these args before proceeding
     # If not passed, use current values
     $argv->{status} ||= $self->status;
-    $argv->{prefix} = $self->prefix unless $argv->{prefix};
+    $argv->{prefix} = $self->prefix unless defined $argv->{prefix};
 
-    if ( $argv->{address} && $argv->{prefix} ){
+    if ( defined $argv->{address} && defined $argv->{prefix} ){
 	my $ip = $class->_prevalidate($argv->{address}, $argv->{prefix});
 	if ( my $tmp = $class->search(address => $ip->addr,
 				      prefix  => $ip->masklen)->first ){
@@ -1679,7 +1680,7 @@ sub get_descendants_trie {
     my $list = ();
     my $code = sub { 
 	my $node = shift @_; 
-	push @$list, $node; 
+	push @$list, $node->data; 
     };
 
     $class->_tree_traverse(root=>$n, code=>$code, tree=>$tree);
@@ -1779,8 +1780,8 @@ sub address_usage {
     my ($self) = @_;
     $self->isa_object_method('address_usage');
 
-    my $start  = $self->_netaddr->network();
-    my $end    = $self->_netaddr->broadcast();
+    my $start  = $self->netaddr->network();
+    my $end    = $self->netaddr->broadcast();
     my $count  = 0;
     my $q;
     my $dbh = $self->db_Main;
@@ -1864,8 +1865,8 @@ sub free_space {
         return ($subnet, fill($newfrom, $to, $divide));
     }
 
-    my @kids = map { $_->_netaddr } $self->children;
-    my $curr = $self->_netaddr->numeric;
+    my @kids = map { $_->netaddr } $self->children;
+    my $curr = $self->netaddr->numeric;
     my @freespace = ();
     foreach my $kid (sort { $a->numeric <=> $b->numeric } @kids) {
         my $curr_addr = NetAddr::IP->new($curr);
@@ -1884,7 +1885,7 @@ sub free_space {
         $curr = $kid->broadcast->numeric + 1;
     }
 
-    my $end = NetAddr::IP->new($self->_netaddr->broadcast->numeric + 1);
+    my $end = NetAddr::IP->new($self->netaddr->broadcast->numeric + 1);
     my $curr_addr = NetAddr::IP->new($curr);
     map { push @freespace, $_ } &fill($curr_addr, $end, $divide);
 
@@ -1910,8 +1911,8 @@ sub subnet_usage {
     $self->throw_user("Call subnet_usage only for Container blocks")
 	if ($self->status->name ne 'Container');
 
-    my $start = $self->_netaddr->network();
-    my $end   = $self->_netaddr->broadcast();
+    my $start = $self->netaddr->network();
+    my $end   = $self->netaddr->broadcast();
 
     my $count = new Math::BigInt(0);
     my $dbh   = $self->db_Main;
@@ -2502,19 +2503,19 @@ sub get_dot_arpa_names {
     my @names;
     if ( $self->version == 4 ){
 	if ( 0 < $self->prefix && $self->prefix <= 8 ){
-	    my @subnets = $self->_netaddr->split(8);
+	    my @subnets = $self->netaddr->split(8);
 	    foreach my $subnet ( @subnets ){
 		push @names, (split(/\./, $subnet->addr))[0];
 	    }
 
 	}elsif ( $self->prefix <= 16 ){
-	    my @subnets = $self->_netaddr->split(16);
+	    my @subnets = $self->netaddr->split(16);
 	    foreach my $subnet ( @subnets ){
 		push @names, join('.', reverse((split(/\./, $subnet->addr))[0..1]));
 	    }	    
 
 	}elsif ( $self->prefix <= 24 ){
-	    my @subnets = $self->_netaddr->split(24);
+	    my @subnets = $self->netaddr->split(24);
 	    foreach my $subnet ( @subnets ){
 		push @names, join('.', reverse((split(/\./, $subnet->addr))[0..2]));
 	    }	    
@@ -2533,12 +2534,12 @@ sub get_dot_arpa_names {
 	if ( my $rem = $self->prefix % 4 ){
 	    # prefix is not a multiple of four
 	    my $split_size = $self->prefix - $rem + 4;
-	    my @subnets = $self->_netaddr->split($split_size);
+	    my @subnets = $self->netaddr->split($split_size);
 	    foreach my $subnet ( @subnets ){
 		push @names, &_get_v6_arpa($subnet);
 	    }
 	}else{
-	    push @names, &_get_v6_arpa($self->_netaddr);
+	    push @names, &_get_v6_arpa($self->netaddr);
 	}
     }
 
@@ -2636,7 +2637,7 @@ sub get_next_free {
 
     my $strategy = $argv{strategy} || Netdot->config->get('IP_ALLOCATION_STRATEGY');
 
-    my $s = $self->_netaddr;
+    my $s = $self->netaddr;
     my $ret;
     if ( $strategy eq 'first' ){
 	for ( my $addr=Math::BigInt->new($s->first->numeric); $addr <= $s->last->numeric; $addr++ ){
@@ -2717,6 +2718,35 @@ sub get_addresses_by {
     map { push @objects, Ipblock->retrieve($_->[0]) } @$rows;
     return @objects;
 }
+
+##################################################################
+=head2 Create a NetAddr::IP object
+
+  Arguments:
+    address & prefix, unless called as instance method
+    prefix will default to host prefix if not specified
+  Returns:
+    NetAddr::IP object
+  Examples:
+    print $ipblock->netaddr->broadcast();
+    print Ipblock->netaddr(address=>$ip, prefix=>$prefix)->addr;
+=cut
+sub netaddr {
+    my ($self, %argv) = @_ ;
+    if ( ref($self) ){
+	# instance method
+	return new NetAddr::IP($self->address, $self->prefix);
+    }else{
+	# class method
+	if ( $argv{address} ){
+	    return new NetAddr::IP($argv{address}, $argv{prefix});
+	}else{
+	    $self->throw_fatal("Ipblock::netaddr: Missing required argument: address");
+	}
+    }
+}
+
+
 
 ##################################################################
 #
@@ -3275,21 +3305,6 @@ sub _tree_get {
 }
 
 ##################################################################
-#
-#   Arguments:
-#     None
-#   Returns:
-#     NetAddr::IP object
-#   Examples:
-#    print $ipblock->_netaddr->broadcast();
-
-sub _netaddr {
-    my $self = shift;
-    $self->isa_object_method('_netaddr');
-    return new NetAddr::IP($self->address, $self->prefix);
-}
-
-##################################################################
 # Convert from IP address to integer and store in object
 # 
 #
@@ -3311,14 +3326,12 @@ sub _obj_int2ip {
     $self->throw_fatal("Invalid object") unless $self;
 
     return unless ( $self->id );
-
-    my $dbh  = $self->db_Main;
-    my $id   = $self->id;
-
-    if ( my ($address) = ($dbh->selectrow_array("SELECT address FROM ipblock WHERE id=$id"))[0] ){
-	my $val = $self->int2ip($address, $self->version);
-	$self->_attribute_store( address => $val );    
+    my $decimal = $self->address;
+    unless ( $decimal =~ /\D/o ){
+	my $ip = $self->int2ip($decimal, $self->version);
+	$self->_attribute_store({address => $ip, decimal => $decimal});
     }
+    
     return 1;
 }
 

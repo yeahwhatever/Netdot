@@ -100,8 +100,8 @@ sub insert {
     if ( $scope->type->name eq 'subnet' ){
 	if ( $scope->version == 4 ){ 
 	    # Add standard attributes
-	    $attributes->{'option broadcast-address'} = $argv->{ipblock}->_netaddr->broadcast->addr();
-	    $attributes->{'option subnet-mask'}       = $argv->{ipblock}->_netaddr->mask;
+	    $attributes->{'option broadcast-address'} = $argv->{ipblock}->netaddr->broadcast->addr();
+	    $attributes->{'option subnet-mask'}       = $argv->{ipblock}->netaddr->mask;
 
 	    if ( $scope->container && $scope->container->enable_failover ){
 		my $failover_peer = $scope->container->failover_peer || 'dhcp-peer';
@@ -200,8 +200,8 @@ sub update{
     if ( $self->type->name eq 'subnet' ){
 	if ( $self->version == 4 ){ 
 	    # Add standard attributes
-	    $attributes->{'option broadcast-address'} = $argv->{ipblock}->_netaddr->broadcast->addr();
-	    $attributes->{'option subnet-mask'}       = $argv->{ipblock}->_netaddr->mask;	
+	    $attributes->{'option broadcast-address'} = $argv->{ipblock}->netaddr->broadcast->addr();
+	    $attributes->{'option subnet-mask'}       = $argv->{ipblock}->netaddr->mask;	
 	    if ( my $zone = $argv->{ipblock}->forward_zone ){
 		# Add the domain-name attribute
 		$attributes->{'option domain-name'} = $zone->name;
@@ -527,7 +527,15 @@ sub _validate_args {
 	    $self->throw_user("$name: Cannot assign DUID ($fields{duid}) to a non-host scope");
 	}
 	if ( $duid =~ /[^A-Fa-f0-9:]/ ){
-	    $self->throw_user("$name: DUID contains invalid characters: $duid");
+	    $self->throw_user("$name: DUID should only contain hexadecimal digits and colons: $duid");
+	}
+	my $hexonly = $duid;
+	$hexonly =~ s/://g; # Remove colons
+	if ( length($hexonly) < 1 ){
+	    $self->throw_user("$name: Invalid DUID (too short): '$duid'\n");
+	}
+	if ( length($hexonly) > 255 ){
+	    $self->throw_user("$name: Invalid DUID (too long): '$duid'\n");
 	}
     }
     if ( $fields{ipblock} ){
@@ -542,28 +550,28 @@ sub _validate_args {
 	}
     }
     if ( $type eq 'host' ){
-	if ( !$fields{ipblock} ){
-	    $self->throw_user("$name: a host scope requires an IP address");
-	}
-	if ( $fields{ipblock}->version == 4 && !$fields{physaddr} ){
-	    $self->throw_user("$name: an IPv4 host scope requires an ethernet addres");
-	}
-	if ( $fields{ipblock}->version == 6 && !$fields{duid} && !$fields{physaddr} ){
-	    $self->throw_user("$name: an IPv6 host scope requires a DUID or ethernet address");
-	}
-	# Is Subnet scope defined?
-	my $subnet = $fields{ipblock}->parent || 
-	    $self->throw_user("$name: $fields{ipblock} not within subnet");
-	my $subnet_scope;
-	unless ( $subnet_scope = ($subnet->dhcp_scopes)[0] ){
-	    $self->throw_user("$name: Subnet ".$subnet->get_label." not dhcp-enabled.");
-	}
-	# Make sure we assign to the correct global container
-	$argv->{container} = $subnet_scope->get_global;
-	$fields{container} = $argv->{container};
+	if ( $fields{ipblock} ){
+	    if ( $fields{ipblock}->version == 4 && !$fields{physaddr} ){
+		$self->throw_user("$name: an IPv4 host scope requires an ethernet addres");
+	    }
+	    if ( $fields{ipblock}->version == 6 && !$fields{duid} && !$fields{physaddr} ){
+		$self->throw_user("$name: an IPv6 host scope requires a DUID or ethernet address");
+	    }
+	    # Is Subnet scope defined?
+	    my $subnet = $fields{ipblock}->parent || 
+		$self->throw_user("$name: $fields{ipblock} not within subnet");
+	    my $subnet_scope;
+	    unless ( $subnet_scope = ($subnet->dhcp_scopes)[0] ){
+		$self->throw_user("$name: Subnet ".$subnet->get_label." not dhcp-enabled.");
+	    }
+	    # Make sure we assign to the correct global container
+	    $argv->{container} = $subnet_scope->get_global;
+	    $fields{container} = $argv->{container};
 
-	if ( $fields{ipblock}->version != $fields{container}->version ){
-	    $self->throw_user("$name: IP version in host scope does not match IP version in container");
+	    # Check for mismatched versions
+	    if ( $fields{ipblock}->version != $fields{container}->version ){
+		$self->throw_user("$name: IP version in host scope does not match IP version in container");
+	    }
 	}
 
 	if ( $fields{physaddr} ){
@@ -581,6 +589,22 @@ sub _validate_args {
 		}
 	    }
 	}
+	if ( $fields{duid} ){
+	    if ( my @scopes = DhcpScope->search(duid=>$fields{duid}) ){
+		if ( my $subnet = $fields{ipblock}->parent ){
+		    foreach my $s ( @scopes ){
+			next if ( ref($self) && $s->id == $self->id );
+			if ( $s->ipblock && (my $osubnet = $s->ipblock->parent) ){
+			    if ( $osubnet->id == $subnet->id ){
+				$self->throw_user("$name: Duplicate DUID in this subnet: ".
+						  $fields{duid});
+			    }
+			}
+		    }
+		}
+	    }
+	}
+
     }elsif ( $type eq 'subnet' ){
 	if ( $fields{ipblock}->version != $fields{container}->version ){
 	    $self->throw_user("$name: IP version in subnet scope does not match IP version in container");
@@ -867,19 +891,28 @@ sub _get_all_data {
 sub _assign_name {
     my ($self, $argv) = @_;
 
-    unless ( $argv->{type} ){
-	if ( ref($self) ){
-	    $argv->{type} = $self->type;
-	}else{
-	    $self->throw_fatal("DhcpScope::_assign_name: Missing required argument: type")
+    # Get these values from object if not passed
+    if ( ref($self) ){
+	foreach my $key (qw(type ipblock physaddr duid)){
+	    $argv->{$key} = $self->$key unless exists $argv->{$key}
 	}
+    }
+
+    unless ( $argv->{type} ){
+	$self->throw_fatal("DhcpScope::_assign_name: Missing required argument: type")
     }
 
     my $name;
     if ( $argv->{type}->name eq 'host' ){
-	$self->throw_fatal("DhcpScope::_assign_name: Missing ipblock object")
-	    unless $argv->{ipblock};
-	$name = $argv->{ipblock}->address;
+	# Try to find a unique name for this scope
+	if ( $argv->{ipblock} ){
+	    $name = $argv->{ipblock}->full_address;
+	}elsif ( $argv->{physaddr} ){
+	    $name = $argv->{physaddr}->address;
+	}elsif ( $argv->{duid} ){
+	    $name = $argv->{duid};
+	}
+	$name =~ s/:/-/g; 
 
     }elsif ( $argv->{type}->name eq 'subnet' ){
 	$self->throw_fatal("DhcpScope::_assign_name: Missing ipblock object")
@@ -887,7 +920,7 @@ sub _assign_name {
 	if ( $argv->{ipblock}->version == 6 ){
 	    $name = $argv->{ipblock}->cidr;
 	}else{
-	    $name = $argv->{ipblock}->address." netmask ".$argv->{ipblock}->_netaddr->mask;
+	    $name = $argv->{ipblock}->address." netmask ".$argv->{ipblock}->netaddr->mask;
 	}
 
     }elsif ( $argv->{type}->name eq 'shared-network' ){

@@ -418,7 +418,7 @@ $meta = {
     index => [ ['serial_number'], ['inventory_number'], ['po_number'] ],
     isjoin => '0',
     primary_key => 'id',
-    label => ['product_id', 'serial_number', 'physaddr'],
+    label => ['serial_number', 'physaddr', 'product_id' ],
     unique => [ ['physaddr'], ['product_id', 'serial_number'] ]
   },
   Availability => {
@@ -2314,7 +2314,7 @@ $meta = {
       'name'
     ],
     primary_key => 'id',
-    unique => [ ['name'], ['asset_id'] ],
+    unique => [ ['name', 'asset_id'] ],
     views => {
       all => [
         'name',
@@ -3009,7 +3009,7 @@ $meta = {
           method => 'scopes',
           table => 'DhcpScopeType'
         },
-        nullable => 1,
+        nullable => 0,
         tag => 'Type',
         type => 'bigint'
       },
@@ -4290,7 +4290,7 @@ $meta = {
       name => {
         default => '',
         description => 'The name of this Interface',
-        length => '64',
+        length => '255',
         nullable => 1,
         tag => 'Name',
         type => 'varchar'
@@ -5404,18 +5404,14 @@ $meta = {
     },
     description => 'Information about an individual',
     has_history => 1,
-    index => [
-      [
-        'email'
-      ]
-    ],
+    index => [],
     isjoin => '0',
     label => [
       'lastname',
       'firstname'
     ],
     primary_key => 'id',
-    unique => [['firstname', 'lastname', 'entity'], [ 'username' ]],
+    unique => [['firstname', 'lastname', 'entity'], ['username'], ['email']],
     views => {
       all => [
         'firstname',
