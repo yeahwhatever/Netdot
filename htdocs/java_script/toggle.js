@@ -27,9 +27,9 @@ function toggleContact(contact_id) {
     toggleLayer(contact_id+'_buttons');
     document.getElementById(contact_id+'_link').innerHTML = (display=='none'?'[+]':'[-]');
 }
-function toggleAllContacts(tog) {
-    e = document.getElementsByClassName('contact');
-    console.log(e);
+function toggleAllContacts(container, tog) {
+    e = document.getElementById(container).getElementsByClassName('contact');
+
     for (i = 0; i< e.length; i++) {
 	elem = e[i];
 
@@ -50,13 +50,13 @@ function toggleAllContacts(tog) {
 	}
     }
     
-    e = document.getElementById('toggleAll');
+    e = document.getElementById(container+'_toggleAll');
     if (e.innerHTML == '[show all]') {
 	e.innerHTML = '[hide all]';
-	e.href = 'javascript:toggleAllContacts(0);';
+	e.href = "javascript:toggleAllContacts('"+ container +"', 0);";
     } else {
 	e.innerHTML = '[show all]';
-	e.href = 'javascript:toggleAllContacts(1);';
+	e.href = "javascript:toggleAllContacts('"+ container +"', 1);";
     }
 }
 function emptyfunction() {
