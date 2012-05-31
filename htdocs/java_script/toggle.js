@@ -27,6 +27,38 @@ function toggleContact(contact_id) {
     toggleLayer(contact_id+'_buttons');
     document.getElementById(contact_id+'_link').innerHTML = (display=='none'?'[+]':'[-]');
 }
+function toggleAllContacts(tog) {
+    e = document.getElementsByClassName('contact');
+    console.log(e);
+    for (i = 0; i< e.length; i++) {
+	elem = e[i];
+
+	if (tog == 0) { // hide
+	    elem.style.display = 'none';
+
+	    buttons = document.getElementById(elem.id + '_buttons');
+	    buttons.style.display = 'none';
+
+	    click = document.getElementById(elem.id+'_link').innerHTML = '[+]';
+	} else {
+	    elem.style.display = 'block';
+
+	    buttons = document.getElementById(elem.id + '_buttons');
+	    buttons.style.display = 'block';
+
+	    click = document.getElementById(elem.id+'_link').innerHTML = '[-]';
+	}
+    }
+    
+    e = document.getElementById('toggleAll');
+    if (e.innerHTML == '[show all]') {
+	e.innerHTML = '[hide all]';
+	e.href = 'javascript:toggleAllContacts(0);';
+    } else {
+	e.innerHTML = '[show all]';
+	e.href = 'javascript:toggleAllContacts(1);';
+    }
+}
 function emptyfunction() {
     // do nothing
     // this function is called by the jsrs code after toggleTasks is called.
