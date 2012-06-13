@@ -337,11 +337,11 @@ sub rotate_table{
         # recognize the SHOW command.  We instead use the CREATE TABLE AS function of postgres
         # to create an exact copy of the original table, then we'll drop all the records from the original
 
-        my $new_table_name = $table."_".$timestamp;
+        my $old_table_name = $table."_".$timestamp;
+	my $child_table = $table."_current";
         eval{
-            $dbh->do("CREATE TABLE $new_table_name AS SELECT * FROM $table");
-            $dbh->do("DELETE FROM $table");
-	    $dbh->do("SELECT setval('".$table."_id_seq', 1, false"); #reset auto_increment
+            $dbh->do("ALTER TABLE $child_table RENAME TO $old_table_name");
+            $dbh->do("CREATE TABLE $child_table() INHERITS ($table)");
         }
     }else{
 	$logger->warn("Could not rotate table $table.  Database $db_type not supported");
